@@ -12,12 +12,19 @@ function isPostgres(): boolean {
 
 export async function getDb() {
   if (isPostgres()) {
-    const { drizzle } = await import("drizzle-orm/node-postgres");
-    const { Pool } = await import("pg");
     const pgSchema = await import("./schema.pg");
 
-    const pool = new Pool({ connectionString: DATABASE_URL });
-    return drizzle(pool, { schema: pgSchema });
+    try {
+      const { neon } = await import("@neondatabase/serverless");
+      const { drizzle } = await import("drizzle-orm/neon-http");
+      const sql = neon(DATABASE_URL);
+      return drizzle(sql, { schema: pgSchema });
+    } catch {
+      const { drizzle } = await import("drizzle-orm/node-postgres");
+      const { Pool } = await import("pg");
+      const pool = new Pool({ connectionString: DATABASE_URL });
+      return drizzle(pool, { schema: pgSchema });
+    }
   }
 
   // SQLite (local)

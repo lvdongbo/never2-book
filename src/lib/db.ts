@@ -15,8 +15,9 @@ if (isPostgres) {
   schema = pgSchema;
 
   try {
-    const { sql } = await import("@vercel/postgres");
-    const { drizzle } = await import("drizzle-orm/vercel-postgres");
+    const { neon } = await import("@neondatabase/serverless");
+    const { drizzle } = await import("drizzle-orm/neon-http");
+    const sql = neon(DATABASE_URL);
     db = drizzle(sql);
   } catch {
     const { drizzle } = await import("drizzle-orm/node-postgres");

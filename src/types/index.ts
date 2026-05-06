@@ -48,7 +48,7 @@ export interface PracticeSessionItem {
   sessionId: number;
   mistakeId: number;
   userAnswer: string;
-  isCorrect: boolean | null;
+  isCorrect: number | null; // 0 = wrong, 1 = correct, null = ungraded
   createdAt: string;
   mistake?: Mistake;
 }

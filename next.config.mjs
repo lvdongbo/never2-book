@@ -4,7 +4,7 @@ const nextConfig = {
     serverComponentsExternalPackages: [
       "better-sqlite3",
       "pg",
-      "@vercel/postgres",
+      "@neondatabase/serverless",
       "@vercel/blob",
     ],
   },
