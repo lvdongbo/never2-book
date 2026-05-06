@@ -8,7 +8,7 @@ interface PracticeItem {
   id: number;
   mistakeId: number;
   userAnswer: string;
-  isCorrect: boolean | null;
+  isCorrect: number | null;
   mistake: {
     subject: string;
     questionText: string;
