@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { SUBJECTS } from "@/types";
 import type { MistakeWithStats, Subject, RandomRules } from "@/types";
 
