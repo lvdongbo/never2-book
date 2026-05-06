@@ -5,6 +5,7 @@ const nextConfig = {
       "better-sqlite3",
       "pg",
       "@vercel/postgres",
+      "@vercel/blob",
     ],
   },
   images: {

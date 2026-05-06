@@ -3,6 +3,8 @@ import fs from "fs/promises";
 import { existsSync, mkdirSync } from "fs";
 import crypto from "crypto";
 
+// --- Local filesystem storage (development) ---
+
 const UPLOAD_DIR =
   process.env.UPLOAD_DIR || path.join(process.cwd(), "data", "uploads");
 
@@ -18,8 +20,7 @@ function getUploadDir(): string {
 
 export interface StorageProvider {
   save(file: Buffer, filename: string, mimeType: string): Promise<string>;
-  getUrl(key: string): string;
-  delete(key: string): Promise<void>;
+  delete(url: string): Promise<void>;
 }
 
 class LocalStorage implements StorageProvider {
@@ -38,14 +39,12 @@ class LocalStorage implements StorageProvider {
     const key = `${crypto.randomUUID()}${ext}`;
     const filepath = path.join(this.baseDir, key);
     await fs.writeFile(filepath, file);
-    return key;
-  }
-
-  getUrl(key: string): string {
     return `/api/uploads/${key}`;
   }
 
-  async delete(key: string): Promise<void> {
+  async delete(url: string): Promise<void> {
+    const key = url.split("/").pop();
+    if (!key) return;
     const filepath = path.join(this.baseDir, path.basename(key));
     try {
       await fs.unlink(filepath);
@@ -55,23 +54,47 @@ class LocalStorage implements StorageProvider {
   }
 }
 
-// Use local storage by default. Swap this for OSS implementation
-// when VOLCANO_ACCESS_KEY is configured.
+// --- Vercel Blob storage (production) ---
+
+class VercelBlobStorage implements StorageProvider {
+  async save(
+    file: Buffer,
+    filename: string,
+    mimeType: string
+  ): Promise<string> {
+    const { put } = await import("@vercel/blob");
+    const ext = path.extname(filename) || ".png";
+    const key = `uploads/${crypto.randomUUID()}${ext}`;
+
+    const blob = await put(key, file, {
+      access: "public",
+      contentType: mimeType,
+    });
+
+    return blob.url;
+  }
+
+  async delete(url: string): Promise<void> {
+    const { del } = await import("@vercel/blob");
+    try {
+      await del(url);
+    } catch {
+      // Already deleted or doesn't exist, ignore
+    }
+  }
+}
+
+// --- Factory ---
+
 let storageInstance: StorageProvider | null = null;
 
 export function getStorage(): StorageProvider {
   if (!storageInstance) {
-    // Check for OSS configuration
-    const accessKey = process.env.VOLCANO_ACCESS_KEY;
-    if (accessKey) {
-      // TODO: Implement VolcanoEngineOSS provider
-      // import { VolcanoOSSProvider } from "./oss";
-      // storageInstance = new VolcanoOSSProvider({ ... });
-      console.warn(
-        "OSS config detected but provider not implemented, falling back to local storage"
-      );
+    if (process.env.BLOB_READ_WRITE_TOKEN) {
+      storageInstance = new VercelBlobStorage();
+    } else {
+      storageInstance = new LocalStorage();
     }
-    storageInstance = new LocalStorage();
   }
   return storageInstance;
 }
@@ -82,15 +105,10 @@ export async function saveImage(
   mimeType: string
 ): Promise<string> {
   const storage = getStorage();
-  const key = await storage.save(buffer, originalName, mimeType);
-  return storage.getUrl(key);
+  return storage.save(buffer, originalName, mimeType);
 }
 
 export async function deleteImage(url: string): Promise<void> {
-  // Extract key from URL: /api/uploads/filename.ext -> filename.ext
-  const key = url.split("/").pop();
-  if (key) {
-    const storage = getStorage();
-    await storage.delete(key);
-  }
+  const storage = getStorage();
+  await storage.delete(url);
 }
