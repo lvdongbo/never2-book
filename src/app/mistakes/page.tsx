@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import ImageLightbox from "@/components/ui/ImageLightbox";
 import type { MistakeWithStats } from "@/types";
 
 export default function MistakesListPage() {
@@ -160,15 +161,15 @@ export default function MistakesListPage() {
                   {mistake.questionImages.length > 0 && (
                     <div className="flex space-x-2 mb-3">
                       {mistake.questionImages.slice(0, 3).map((url, i) => (
-                        <img
+                        <ImageLightbox
                           key={i}
                           src={url}
                           alt="题目图片"
-                          className="w-16 h-16 object-cover rounded border border-gray-200"
+                          className="w-20 h-20 object-cover rounded border border-gray-200 cursor-zoom-in"
                         />
                       ))}
                       {mistake.questionImages.length > 3 && (
-                        <div className="w-16 h-16 bg-gray-100 rounded border border-gray-200 flex items-center justify-center text-xs text-gray-500">
+                        <div className="w-20 h-20 bg-gray-100 rounded border border-gray-200 flex items-center justify-center text-xs text-gray-500">
                           +{mistake.questionImages.length - 3}
                         </div>
                       )}

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 
 interface User {
@@ -92,10 +93,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           {/* Logo area */}
           <div className="p-6 border-b border-gray-100">
             <Link href="/dashboard" className="flex items-center space-x-2">
-              <img
+              <Image
                 src="/logo.png"
                 alt="不二集 Never2"
-                className="h-10 w-auto"
+                width={40}
+                height={40}
               />
               <div>
                 <h1 className="text-lg font-bold text-primary-700">
@@ -188,7 +190,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               />
             </svg>
           </button>
-          <img src="/logo.png" alt="不二集" className="h-7 w-auto" />
+          <Image src="/logo.png" alt="不二集" width={28} height={28} />
           <div className="w-10" />
         </div>
 

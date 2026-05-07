@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import ImageLightbox from "@/components/ui/ImageLightbox";
 import { SUBJECTS } from "@/types";
 import type { MistakeWithStats, Subject, RandomRules } from "@/types";
 
@@ -241,9 +242,28 @@ export default function NewPracticePage() {
                     <div className="flex items-center space-x-2 mb-1">
                       <span className="badge-blue text-xs">{mistake.subject}</span>
                     </div>
-                    <p className="text-sm text-gray-900 line-clamp-2 mb-2">
-                      {mistake.questionText || "（图片题）"}
-                    </p>
+                    {mistake.questionText && (
+                      <p className="text-sm text-gray-900 line-clamp-2 mb-2">
+                        {mistake.questionText}
+                      </p>
+                    )}
+                    {mistake.questionImages.length > 0 && (
+                      <div className="flex space-x-2 mb-2">
+                        {mistake.questionImages.slice(0, 2).map((url, i) => (
+                          <ImageLightbox
+                            key={i}
+                            src={url}
+                            alt="题目图片"
+                            className="w-20 h-20 object-cover rounded border border-gray-200 cursor-zoom-in"
+                          />
+                        ))}
+                        {mistake.questionImages.length > 2 && (
+                          <div className="w-20 h-20 bg-gray-100 rounded border border-gray-200 flex items-center justify-center text-xs text-gray-500">
+                            +{mistake.questionImages.length - 2}
+                          </div>
+                        )}
+                      </div>
+                    )}
                     <div className="flex items-center space-x-3 text-xs text-gray-500">
                       <span>练习 {mistake.totalPractices} 次</span>
                       <span className="text-green-600">
