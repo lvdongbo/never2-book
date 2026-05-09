@@ -50,6 +50,7 @@ export default function LoginPage() {
             height={120}
             className="mx-auto mb-4"
             priority
+            unoptimized
           />
           <h1 className="text-3xl font-bold text-primary-700 mb-2">
             不二集

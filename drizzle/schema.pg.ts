@@ -65,3 +65,58 @@ export const practiceSessionItems = pgTable("practice_session_items", {
     .notNull()
     .default(sql`now()`),
 });
+
+// ============ Dictation (默写) ============
+
+export const dictationWords = pgTable("dictation_words", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  subject: text("subject").notNull(),
+  word: text("word").notNull(),
+  prompt: text("prompt").notNull().default(""),
+  expectedAnswer: text("expected_answer").notNull(),
+  wrongAnswer: text("wrong_answer").notNull().default(""),
+  notes: text("notes").notNull().default(""),
+  tags: text("tags").notNull().default("[]"),
+  isMastered: integer("is_mastered").notNull().default(0),
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`now()`),
+  updatedAt: text("updated_at")
+    .notNull()
+    .default(sql`now()`),
+});
+
+export const dictationSessions = pgTable("dictation_sessions", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  name: text("name").notNull().default(""),
+  isRandom: integer("is_random").notNull().default(0),
+  randomRules: text("random_rules"),
+  status: text("status").notNull().default("in_progress"),
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`now()`),
+  updatedAt: text("updated_at")
+    .notNull()
+    .default(sql`now()`),
+});
+
+export const dictationSessionItems = pgTable("dictation_session_items", {
+  id: serial("id").primaryKey(),
+  sessionId: integer("session_id")
+    .notNull()
+    .references(() => dictationSessions.id, { onDelete: "cascade" }),
+  dictationWordId: integer("dictation_word_id")
+    .notNull()
+    .references(() => dictationWords.id, { onDelete: "cascade" }),
+  userAnswer: text("user_answer").notNull().default(""),
+  isCorrect: integer("is_correct"),
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`now()`),
+});

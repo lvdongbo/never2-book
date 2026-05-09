@@ -33,4 +33,12 @@ if (isPostgres) {
 }
 
 export { db, schema };
-export const { users, mistakes, practiceSessions, practiceSessionItems } = schema;
+export const {
+  users,
+  mistakes,
+  practiceSessions,
+  practiceSessionItems,
+  dictationWords,
+  dictationSessions,
+  dictationSessionItems,
+} = schema;

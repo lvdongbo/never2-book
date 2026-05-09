@@ -68,6 +68,81 @@ export interface CreateMistakeInput {
   explanationImages: string[];
 }
 
+// ============ Dictation (默写) types ============
+
+export type DictationSubject = "语文" | "英语";
+
+export const DICTATION_SUBJECTS: DictationSubject[] = ["语文", "英语"];
+
+export interface DictationWord {
+  id: number;
+  userId: number;
+  subject: DictationSubject;
+  word: string;
+  prompt: string;
+  expectedAnswer: string;
+  wrongAnswer: string;
+  notes: string;
+  tags: string[]; // parsed from JSON
+  isMastered: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DictationWordWithStats extends DictationWord {
+  totalPractices: number;
+  totalCorrect: number;
+  totalWrong: number;
+  correctRate: number;
+}
+
+export interface DictationSession {
+  id: number;
+  userId: number;
+  name: string;
+  isRandom: boolean;
+  randomRules: DictationRandomRules | null;
+  status: "in_progress" | "submitted";
+  createdAt: string;
+  updatedAt: string;
+  items?: DictationSessionItem[];
+}
+
+export interface DictationSessionItem {
+  id: number;
+  sessionId: number;
+  dictationWordId: number;
+  userAnswer: string;
+  isCorrect: number | null; // null=未提交, 0=错误, 1=正确
+  createdAt: string;
+  word?: DictationWord;
+}
+
+export interface DictationRandomRules {
+  count: number;
+  orderBy: "practices" | "errors" | "random";
+  orderDir: "asc" | "desc";
+  subject?: DictationSubject;
+}
+
+export interface CreateDictationWordInput {
+  subject: DictationSubject;
+  word: string;
+  prompt: string;
+  expectedAnswer: string;
+  wrongAnswer: string;
+  notes: string;
+  tags: string[];
+}
+
+export interface DictationWordStats {
+  dictationWordId: number;
+  totalPractices: number;
+  totalCorrect: number;
+  totalWrong: number;
+  correctRate: number;
+}
+
 export interface AuthResponse {
   success: boolean;
   message?: string;
