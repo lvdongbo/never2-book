@@ -1,24 +1,22 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { DICTATION_SUBJECTS } from "@/types";
-import type { DictationSubject } from "@/types";
+import GradeSubjectUnitSelect from "./GradeSubjectUnitSelect";
+import type { Semester } from "@/types";
 
 interface ScanResult {
   entries: Array<{ prompt: string; answer: string }>;
-  subject: DictationSubject;
 }
 
 interface ScanImportProps {
-  subject?: DictationSubject;
   onScanComplete: (result: ScanResult) => void;
 }
 
-export default function ScanImport({
-  subject: initialSubject = "语文",
-  onScanComplete,
-}: ScanImportProps) {
-  const [subject, setSubject] = useState<DictationSubject>(initialSubject);
+export default function ScanImport({ onScanComplete }: ScanImportProps) {
+  const [gradeId, setGradeId] = useState<number | null>(null);
+  const [subjectId, setSubjectId] = useState<number | null>(null);
+  const [unitId, setUnitId] = useState<number | null>(null);
+  const [semester, setSemester] = useState<Semester | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [scanning, setScanning] = useState(false);
@@ -53,7 +51,7 @@ export default function ScanImport({
     try {
       const fd = new FormData();
       fd.append("file", imageFile);
-      fd.append("subject", subject);
+      if (subjectId) fd.append("subjectId", String(subjectId));
 
       const res = await fetch("/api/dictation/scan-ocr", {
         method: "POST",
@@ -71,7 +69,6 @@ export default function ScanImport({
 
       onScanComplete({
         entries: entries || [],
-        subject,
       });
     } catch {
       setError("识别失败，请重试");
@@ -82,26 +79,18 @@ export default function ScanImport({
 
   return (
     <div className="space-y-6">
-      {/* Subject */}
-      <div>
-        <label className="label">科目</label>
-        <div className="flex space-x-2">
-          {DICTATION_SUBJECTS.map((s) => (
-            <button
-              key={s}
-              type="button"
-              onClick={() => setSubject(s)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                subject === s
-                  ? "bg-primary-600 text-white"
-                  : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-              }`}
-            >
-              {s}
-            </button>
-          ))}
-        </div>
-      </div>
+      {/* Grade / Subject / Unit */}
+      <GradeSubjectUnitSelect
+        gradeId={gradeId}
+        subjectId={subjectId}
+        unitId={unitId}
+        semester={semester}
+        onGradeChange={setGradeId}
+        onSubjectChange={setSubjectId}
+        onUnitChange={setUnitId}
+        onSemesterChange={setSemester}
+        applyUserDefaults
+      />
 
       {/* Upload area */}
       <div>
@@ -168,9 +157,7 @@ export default function ScanImport({
 
       {/* Hint */}
       <div className="bg-blue-50 border border-blue-100 rounded-lg px-4 py-3 text-sm text-blue-700">
-        {subject === "英语"
-          ? "拍摄课本上的单词/词组/句子列表。AI 识别后会跳转到编辑界面。"
-          : "拍摄课本上的生字/词语列表。AI 识别后会跳转到编辑界面。"}
+        拍摄课本上的生字/词语列表。AI 识别后会跳转到编辑界面。
       </div>
 
       {error && (

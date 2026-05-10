@@ -41,4 +41,7 @@ export const {
   dictationWords,
   dictationSessions,
   dictationSessionItems,
+  grades,
+  subjects,
+  units,
 } = schema;

@@ -1,13 +1,17 @@
 "use client";
 
-import { useState, useMemo, type FormEvent } from "react";
-import { DICTATION_SUBJECTS } from "@/types";
-import type { DictationSubject, DictationWord } from "@/types";
+import { useState, useMemo, useEffect, type FormEvent } from "react";
+import GradeSubjectUnitSelect from "./GradeSubjectUnitSelect";
+import type { DictationSubject, DictationWord, SubjectEntity, Semester } from "@/types";
 
 interface DictationFormProps {
   initialData?: DictationWord;
   onSubmit: (data: {
     subject: DictationSubject;
+    gradeId?: number | null;
+    subjectId?: number | null;
+    unitId?: number | null;
+    semester?: Semester | null;
     word: string;
     prompt: string;
     expectedAnswer: string;
@@ -18,36 +22,42 @@ interface DictationFormProps {
   submitLabel?: string;
 }
 
-const LABELS: Record<
-  DictationSubject,
-  {
-    answer: string;
-    answerPlaceholder: string;
-    prompt: string;
-    promptPlaceholder: string;
+function deriveSubjectName(subjectId: number | null | undefined, subjects: SubjectEntity[]): string {
+  if (!subjectId) return "";
+  const found = subjects.find((s) => s.id === subjectId);
+  return found?.name || "";
+}
+
+function getLabels(subjectName: string) {
+  if (subjectName === "英语") {
+    return {
+      answer: "英文",
+      answerPlaceholder: "beautiful",
+      prompt: "中文",
+      promptPlaceholder: "美丽的",
+      isChineseSubject: false,
+    };
   }
-> = {
-  语文: {
+  return {
     answer: "汉字",
     answerPlaceholder: "波澜壮阔",
     prompt: "拼音",
     promptPlaceholder: "bo lan zhuang kuo",
-  },
-  英语: {
-    answer: "英文",
-    answerPlaceholder: "beautiful",
-    prompt: "中文",
-    promptPlaceholder: "美丽的",
-  },
-};
+    isChineseSubject: true,
+  };
+}
 
 export default function DictationForm({
   initialData,
   onSubmit,
   submitLabel = "保存",
 }: DictationFormProps) {
-  const [subject, setSubject] = useState<DictationSubject>(
-    initialData?.subject || "语文"
+  const [subjects, setSubjects] = useState<SubjectEntity[]>([]);
+  const [gradeId, setGradeId] = useState<number | null>(initialData?.gradeId ?? null);
+  const [subjId, setSubjId] = useState<number | null>(initialData?.subjectId ?? null);
+  const [unitId, setUnitId] = useState<number | null>(initialData?.unitId ?? null);
+  const [semester, setSemester] = useState<Semester | null>(
+    initialData?.semester ?? initialData?.unit?.semester ?? null
   );
   const [prompt, setPrompt] = useState(initialData?.prompt || "");
   const [answer, setAnswer] = useState(initialData?.expectedAnswer || "");
@@ -59,6 +69,13 @@ export default function DictationForm({
   const [pinyinLoading, setPinyinLoading] = useState(false);
   const [error, setError] = useState("");
 
+  useEffect(() => {
+    fetch("/api/subjects")
+      .then((r) => r.json())
+      .then((d) => { if (d.success) setSubjects(d.data); })
+      .catch(() => {});
+  }, []);
+
   const parsedTags = useMemo(() => {
     return tagsInput
       .split(/[,，]/)
@@ -66,12 +83,12 @@ export default function DictationForm({
       .filter((t) => t.length > 0);
   }, [tagsInput]);
 
-  const labels = useMemo(() => LABELS[subject], [subject]);
+  const subjectName = deriveSubjectName(subjId, subjects);
+  const labels = useMemo(() => getLabels(subjectName), [subjectName]);
 
-  const notesPlaceholder =
-    subject === "英语"
-      ? "例如：beau-ty-full，三个部分拼起来"
-      : "例如：注意「澜」有三点水";
+  const notesPlaceholder = subjectName === "英语"
+    ? "例如：beau-ty-full，三个部分拼起来"
+    : "例如：注意「澜」有三点水";
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -89,7 +106,11 @@ export default function DictationForm({
     setLoading(true);
     try {
       await onSubmit({
-        subject,
+        subject: (subjectName || "语文") as DictationSubject,
+        gradeId,
+        subjectId: subjId,
+        unitId,
+        semester,
         word: answer.trim(),
         prompt: prompt.trim(),
         expectedAnswer: answer.trim(),
@@ -105,7 +126,7 @@ export default function DictationForm({
   };
 
   const handleAutoPinyin = async (value: string) => {
-    if (!value.trim() || prompt.trim()) return;
+    if (!value.trim() || prompt.trim() || !labels.isChineseSubject) return;
     setPinyinLoading(true);
     try {
       const res = await fetch("/api/dictation/pinyin", {
@@ -130,28 +151,20 @@ export default function DictationForm({
         </div>
       )}
 
-      {/* Subject selector */}
-      <div>
-        <label className="label">科目</label>
-        <div className="flex space-x-2">
-          {DICTATION_SUBJECTS.map((s) => (
-            <button
-              key={s}
-              type="button"
-              onClick={() => setSubject(s)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                subject === s
-                  ? "bg-primary-600 text-white"
-                  : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-              }`}
-            >
-              {s}
-            </button>
-          ))}
-        </div>
-      </div>
+      {/* Grade / Subject / Unit selectors */}
+      <GradeSubjectUnitSelect
+        gradeId={gradeId}
+        subjectId={subjId}
+        unitId={unitId}
+        semester={semester}
+        onGradeChange={setGradeId}
+        onSubjectChange={setSubjId}
+        onUnitChange={setUnitId}
+        onSemesterChange={setSemester}
+        applyUserDefaults={!initialData}
+      />
 
-      {/* Answer — first */}
+      {/* Answer */}
       <div>
         <label className="label" htmlFor="answer">
           {labels.answer} <span className="text-red-400">*</span>
@@ -170,7 +183,7 @@ export default function DictationForm({
         />
       </div>
 
-      {/* Prompt — second */}
+      {/* Prompt */}
       <div>
         <label className="label" htmlFor="prompt">
           {labels.prompt} <span className="text-red-400">*</span>
@@ -214,13 +227,13 @@ export default function DictationForm({
           标签
         </label>
         <p className="text-xs text-gray-400 mb-1">
-          可选，用逗号分隔多个标签，例如：三年级上, 易错, 动物类
+          可选，用逗号分隔多个标签，例如：易错, 动物类
         </p>
         <input
           id="tags"
           type="text"
           className="input-field"
-          placeholder="例如：三年级上, 易错"
+          placeholder="例如：易错, 动物类"
           value={tagsInput}
           onChange={(e) => setTagsInput(e.target.value)}
         />

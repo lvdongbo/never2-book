@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import DictationForm from "@/components/dictation/DictationForm";
-import type { DictationWord } from "@/types";
+import type { DictationWord, Semester } from "@/types";
 
 export default function EditDictationWordPage() {
   const router = useRouter();
@@ -29,6 +29,10 @@ export default function EditDictationWordPage() {
 
   const handleSubmit = async (data: {
     subject: "语文" | "英语";
+    gradeId?: number | null;
+    subjectId?: number | null;
+    unitId?: number | null;
+    semester?: Semester | null;
     word: string;
     prompt: string;
     expectedAnswer: string;

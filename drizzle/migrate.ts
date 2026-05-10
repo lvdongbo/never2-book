@@ -20,6 +20,13 @@ const sqlite = new Database(resolvedPath);
 sqlite.pragma("journal_mode = WAL");
 sqlite.pragma("foreign_keys = ON");
 
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS _migrations (
+    name TEXT PRIMARY KEY,
+    applied_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )
+`);
+
 console.log("Running migrations...");
 
 // Read and execute SQL migration
@@ -31,6 +38,14 @@ if (fs.existsSync(migrationsDir)) {
     .sort();
 
   for (const file of files) {
+    const existing = sqlite
+      .prepare("SELECT 1 FROM _migrations WHERE name = ?")
+      .get(file);
+    if (existing) {
+      console.log(`  Skipping ${file} (already applied)`);
+      continue;
+    }
+
     console.log(`  Running ${file}...`);
     const sql = fs.readFileSync(path.join(migrationsDir, file), "utf-8");
     // Split by semicolons and execute each statement
@@ -38,9 +53,33 @@ if (fs.existsSync(migrationsDir)) {
       .split(";")
       .map((s) => s.trim())
       .filter((s) => s.length > 0);
-    for (const stmt of statements) {
-      sqlite.exec(stmt);
-    }
+
+    const runMigration = sqlite.transaction(() => {
+      for (const stmt of statements) {
+        try {
+          sqlite.exec(stmt);
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message.toLowerCase() : "";
+          const isSafeDuplicateError =
+            message.includes("duplicate column name") ||
+            message.includes("already exists");
+
+          if (isSafeDuplicateError) {
+            console.log(`    Skipping statement (already exists): ${stmt}`);
+            continue;
+          }
+
+          throw error;
+        }
+      }
+
+      sqlite
+        .prepare("INSERT INTO _migrations (name) VALUES (?)")
+        .run(file);
+    });
+
+    runMigration();
   }
 }
 

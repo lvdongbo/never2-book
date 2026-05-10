@@ -3,8 +3,15 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { DICTATION_SUBJECTS } from "@/types";
-import type { DictationWordWithStats, DictationRandomRules } from "@/types";
+import type { DictationWordWithStats, DictationRandomRules, Grade, SubjectEntity, Semester } from "@/types";
+
+interface UnitOption {
+  id: number;
+  name: string;
+  semester: string;
+  gradeId: number;
+  subjectId: number;
+}
 
 export default function NewDictationPracticePage() {
   const router = useRouter();
@@ -12,9 +19,18 @@ export default function NewDictationPracticePage() {
   const [loading, setLoading] = useState(true);
   const [mode, setMode] = useState<"manual" | "random">("manual");
   const [selected, setSelected] = useState<Set<number>>(new Set());
-  const [subjectFilter, setSubjectFilter] = useState<string>("全部");
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState("");
+
+  // Hierarchy filters
+  const [grades, setGrades] = useState<Grade[]>([]);
+  const [subjects, setSubjects] = useState<SubjectEntity[]>([]);
+  const [unitOptions, setUnitOptions] = useState<UnitOption[]>([]);
+  const [filterGradeId, setFilterGradeId] = useState("");
+  const [filterSubjectId, setFilterSubjectId] = useState("");
+  const [filterUnitId, setFilterUnitId] = useState("");
+  const [filterSemester, setFilterSemester] = useState<Semester | "">("");
+  const [defaultsReady, setDefaultsReady] = useState(false);
 
   // Random generation state
   const [randomCount, setRandomCount] = useState(10);
@@ -22,12 +38,59 @@ export default function NewDictationPracticePage() {
     useState<DictationRandomRules["orderBy"]>("errors");
   const [randomOrderDir, setRandomOrderDir] =
     useState<DictationRandomRules["orderDir"]>("desc");
-  const [randomSubject, setRandomSubject] = useState<string>("全部");
+  const [randomGradeId, setRandomGradeId] = useState("");
+  const [randomSubjectId, setRandomSubjectId] = useState("");
+  const [randomUnitId, setRandomUnitId] = useState("");
+  const [randomSemester, setRandomSemester] = useState<Semester | "">("");
+
+  useEffect(() => {
+    fetch("/api/settings")
+      .then((r) => r.json())
+      .then((d) => {
+        if (!d.success) return;
+        const defaultGrade = d.data?.currentGradeId ? String(d.data.currentGradeId) : "";
+        const defaultSemester = (d.data?.currentSemester as Semester | undefined) || "";
+
+        if (defaultGrade) {
+          setFilterGradeId(defaultGrade);
+        }
+        if (defaultSemester) {
+          setFilterSemester(defaultSemester);
+        }
+        if (defaultGrade) {
+          setRandomGradeId(defaultGrade);
+        }
+        if (defaultSemester) {
+          setRandomSemester(defaultSemester);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setDefaultsReady(true));
+  }, []);
+
+  const fetchRefs = useCallback(async () => {
+    const [gRes, sRes] = await Promise.all([
+      fetch("/api/grades"),
+      fetch("/api/subjects"),
+    ]);
+    const g = await gRes.json();
+    const s = await sRes.json();
+    if (g.success) setGrades(g.data);
+    if (s.success) setSubjects(s.data);
+  }, []);
+
+  useEffect(() => { fetchRefs(); }, [fetchRefs]);
 
   const fetchWords = useCallback(async () => {
+    if (!defaultsReady) return;
     setLoading(true);
     try {
-      const res = await fetch("/api/dictation");
+      const params = new URLSearchParams();
+      if (filterGradeId) params.set("gradeId", filterGradeId);
+      if (filterSubjectId) params.set("subjectId", filterSubjectId);
+      if (filterUnitId) params.set("unitId", filterUnitId);
+      if (filterSemester) params.set("semester", filterSemester);
+      const res = await fetch("/api/dictation?" + params.toString());
       const data = await res.json();
       if (data.success) {
         setWords(data.data.filter((w: DictationWordWithStats) => !w.isMastered));
@@ -37,15 +100,41 @@ export default function NewDictationPracticePage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [defaultsReady, filterGradeId, filterSubjectId, filterUnitId, filterSemester]);
 
   useEffect(() => {
     fetchWords();
   }, [fetchWords]);
 
-  const filtered = words.filter(
-    (w) => subjectFilter === "全部" || w.subject === subjectFilter
-  );
+  const fetchUnits = useCallback(async () => {
+    if (!defaultsReady) return;
+    if (!filterGradeId && !filterSubjectId) { setUnitOptions([]); return; }
+    const params = new URLSearchParams();
+    if (filterGradeId) params.set("gradeId", filterGradeId);
+    if (filterSubjectId) params.set("subjectId", filterSubjectId);
+    if (filterSemester) params.set("semester", filterSemester);
+    const res = await fetch("/api/units?" + params.toString());
+    const json = await res.json();
+    if (json.success) setUnitOptions(json.data);
+  }, [defaultsReady, filterGradeId, filterSubjectId, filterSemester]);
+
+  useEffect(() => { fetchUnits(); }, [fetchUnits]);
+
+  useEffect(() => {
+    if (!randomGradeId && !randomSubjectId) return;
+    const params = new URLSearchParams();
+    if (randomGradeId) params.set("gradeId", randomGradeId);
+    if (randomSubjectId) params.set("subjectId", randomSubjectId);
+    if (randomSemester) params.set("semester", randomSemester);
+    fetch("/api/units?" + params.toString())
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.success) setUnitOptions(d.data);
+      })
+      .catch(() => {});
+  }, [randomGradeId, randomSubjectId, randomSemester]);
+
+  const filtered = words;
 
   const toggleSelect = (id: number) => {
     const newSelected = new Set(selected);
@@ -107,7 +196,10 @@ export default function NewDictationPracticePage() {
           count: randomCount,
           orderBy: randomOrderBy,
           orderDir: randomOrderDir,
-          subject: randomSubject !== "全部" ? randomSubject : undefined,
+          gradeId: randomGradeId ? parseInt(randomGradeId) : undefined,
+          subjectId: randomSubjectId ? parseInt(randomSubjectId) : undefined,
+          unitId: randomUnitId ? parseInt(randomUnitId) : undefined,
+          semester: randomSemester || undefined,
         }),
       });
       const data = await res.json();
@@ -176,20 +268,24 @@ export default function NewDictationPracticePage() {
         <>
           {/* Filters */}
           <div className="flex items-center justify-between mb-4">
-            <div className="flex space-x-1 bg-gray-100 rounded-lg p-1">
-              {["全部", ...DICTATION_SUBJECTS].map((s) => (
-                <button
-                  key={s}
-                  onClick={() => setSubjectFilter(s)}
-                  className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                    subjectFilter === s
-                      ? "bg-white text-primary-700 shadow-sm"
-                      : "text-gray-600 hover:text-gray-900"
-                  }`}
-                >
-                  {s}
-                </button>
-              ))}
+            <div className="flex flex-wrap gap-2">
+              <select className="input-field py-1.5 text-sm w-auto" value={filterGradeId} onChange={(e) => { setFilterGradeId(e.target.value); setFilterUnitId(""); }}>
+                <option value="">全部年级</option>
+                {grades.map((g) => (<option key={g.id} value={g.id}>{g.name}</option>))}
+              </select>
+              <select className="input-field py-1.5 text-sm w-auto" value={filterSemester} onChange={(e) => { setFilterSemester((e.target.value as Semester | "") || ""); setFilterUnitId(""); }}>
+                <option value="">全部学期</option>
+                <option value="上学期">上学期</option>
+                <option value="下学期">下学期</option>
+              </select>
+              <select className="input-field py-1.5 text-sm w-auto" value={filterSubjectId} onChange={(e) => { setFilterSubjectId(e.target.value); setFilterUnitId(""); }}>
+                <option value="">全部学科</option>
+                {subjects.map((s) => (<option key={s.id} value={s.id}>{s.name}</option>))}
+              </select>
+              <select className="input-field py-1.5 text-sm w-auto" value={filterUnitId} onChange={(e) => setFilterUnitId(e.target.value)}>
+                <option value="">全部单元</option>
+                {unitOptions.map((u) => (<option key={u.id} value={u.id}>{u.name} ({u.semester})</option>))}
+              </select>
             </div>
             <div className="flex space-x-2">
               <button
@@ -238,9 +334,17 @@ export default function NewDictationPracticePage() {
                   />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center space-x-2 mb-1">
-                      <span className="badge-blue text-xs">
-                        {word.subject}
-                      </span>
+                      {word.subjectEntity && (
+                        <span className="badge-blue text-xs">{word.subjectEntity.name}</span>
+                      )}
+                      {!word.subjectEntity && (
+                        <span className="badge-blue text-xs">{word.subject}</span>
+                      )}
+                      {(word.grade?.name || word.semester || word.unit?.name) && (
+                        <span className="text-xs text-gray-500">
+                          {[word.grade?.name, word.semester, word.unit?.name].filter(Boolean).join("/")}
+                        </span>
+                      )}
                     </div>
                     <div className="flex items-baseline flex-wrap gap-x-2 gap-y-0.5 text-sm mb-1">
                       <span className="text-xs text-gray-400">看</span>
@@ -351,21 +455,25 @@ export default function NewDictationPracticePage() {
           )}
 
           <div>
-            <label className="label">科目筛选（可选）</label>
-            <div className="flex space-x-2">
-              {["全部", ...DICTATION_SUBJECTS].map((s) => (
-                <button
-                  key={s}
-                  onClick={() => setRandomSubject(s)}
-                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                    randomSubject === s
-                      ? "bg-primary-600 text-white"
-                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                  }`}
-                >
-                  {s}
-                </button>
-              ))}
+            <label className="label">筛选条件（可选）</label>
+            <div className="flex flex-wrap gap-2">
+              <select className="input-field py-1.5 text-sm w-auto" value={randomGradeId} onChange={(e) => { setRandomGradeId(e.target.value); setRandomUnitId(""); }}>
+                <option value="">全部年级</option>
+                {grades.map((g) => (<option key={g.id} value={g.id}>{g.name}</option>))}
+              </select>
+              <select className="input-field py-1.5 text-sm w-auto" value={randomSemester} onChange={(e) => { setRandomSemester((e.target.value as Semester | "") || ""); setRandomUnitId(""); }}>
+                <option value="">全部学期</option>
+                <option value="上学期">上学期</option>
+                <option value="下学期">下学期</option>
+              </select>
+              <select className="input-field py-1.5 text-sm w-auto" value={randomSubjectId} onChange={(e) => { setRandomSubjectId(e.target.value); setRandomUnitId(""); }}>
+                <option value="">全部学科</option>
+                {subjects.map((s) => (<option key={s.id} value={s.id}>{s.name}</option>))}
+              </select>
+              <select className="input-field py-1.5 text-sm w-auto" value={randomUnitId} onChange={(e) => setRandomUnitId(e.target.value)}>
+                <option value="">全部单元</option>
+                {unitOptions.map((u) => (<option key={u.id} value={u.id}>{u.name} ({u.semester})</option>))}
+              </select>
             </div>
           </div>
 

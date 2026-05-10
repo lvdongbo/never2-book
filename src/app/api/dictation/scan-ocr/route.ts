@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
+import { db, subjects } from "@/lib/db";
 import { requireAuth } from "@/lib/auth";
+import { eq, and } from "drizzle-orm";
 
 const API_KEY = process.env.LLM_API_KEY || "";
 const BASE_URL = process.env.LLM_BASE_URL || "https://dashscope.aliyuncs.com/compatible-mode/v1";
@@ -7,7 +9,7 @@ const MODEL = process.env.LLM_MODEL || "qwen-vl-plus";
 
 export async function POST(request: Request) {
   try {
-    await requireAuth();
+    const user = await requireAuth();
 
     if (!API_KEY) {
       return NextResponse.json(
@@ -22,7 +24,16 @@ export async function POST(request: Request) {
 
     const formData = await request.formData();
     const file = formData.get("file");
-    const subject = (formData.get("subject") as string) || "语文";
+    let subject = (formData.get("subject") as string) || "语文";
+    const subjectIdStr = formData.get("subjectId") as string;
+    if (subjectIdStr) {
+      const rows = await db
+        .select({ name: subjects.name })
+        .from(subjects)
+        .where(and(eq(subjects.id, parseInt(subjectIdStr)), eq(subjects.userId, user.id)))
+        .limit(1);
+      if (rows.length > 0) subject = rows[0].name;
+    }
 
     if (!file || !(file instanceof File)) {
       return NextResponse.json(

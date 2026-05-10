@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { DICTATION_SUBJECTS } from "@/types";
-import type { DictationSubject } from "@/types";
+import GradeSubjectUnitSelect from "./GradeSubjectUnitSelect";
+import type { Semester } from "@/types";
 
 interface TableRow {
   id: string;
@@ -13,9 +13,7 @@ interface TableRow {
 }
 
 interface EntryTableProps {
-  subject: DictationSubject;
   initialEntries?: Array<{ prompt: string; answer: string }>;
-  onSubjectChange?: (s: DictationSubject) => void;
   showBack?: boolean;
   onBack?: () => void;
 }
@@ -26,14 +24,15 @@ function nextId() {
 }
 
 export default function EntryTable({
-  subject: initialSubject,
   initialEntries = [],
-  onSubjectChange,
   showBack = false,
   onBack,
 }: EntryTableProps) {
   const router = useRouter();
-  const [subject, setSubject] = useState<DictationSubject>(initialSubject);
+  const [gradeId, setGradeId] = useState<number | null>(null);
+  const [subjectId, setSubjectId] = useState<number | null>(null);
+  const [unitId, setUnitId] = useState<number | null>(null);
+  const [semester, setSemester] = useState<Semester | null>(null);
   const [rows, setRows] = useState<TableRow[]>(() =>
     initialEntries.length > 0
       ? initialEntries.map((e) => ({
@@ -47,13 +46,6 @@ export default function EntryTable({
   const [globalTags, setGlobalTags] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-
-  const switchSubject = (s: DictationSubject) => {
-    setSubject(s);
-    setRows([]);
-    setError("");
-    onSubjectChange?.(s);
-  };
 
   const addRow = () => {
     setRows((prev) => [
@@ -97,7 +89,9 @@ export default function EntryTable({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          subject,
+          subjectId,
+          gradeId,
+          unitId,
           entries: rows
             .filter((r) => r.answer.trim())
             .map((r) => ({
@@ -129,11 +123,11 @@ export default function EntryTable({
 
   const [pinyinLoading, setPinyinLoading] = useState<Record<string, boolean>>({});
 
-  const isEnglish = subject === "英语";
-  const col1Label = isEnglish ? "英文" : "汉字";
-  const col2Label = isEnglish ? "中文" : "拼音";
-  const col1Placeholder = isEnglish ? "behind" : "波澜壮阔";
-  const col2Placeholder = isEnglish ? "美丽的" : "bo lan zhuang kuo";
+  // Default labels - will be determined by selected subject at form container level
+  const col1Label = "答案";
+  const col2Label = "提示";
+  const col1Placeholder = "答案";
+  const col2Placeholder = "提示";
 
   return (
     <div className="space-y-4">
@@ -143,26 +137,18 @@ export default function EntryTable({
         </div>
       )}
 
-      {/* Subject */}
-      <div>
-        <label className="label">科目</label>
-        <div className="flex space-x-2">
-          {DICTATION_SUBJECTS.map((s) => (
-            <button
-              key={s}
-              type="button"
-              onClick={() => switchSubject(s)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                subject === s
-                  ? "bg-primary-600 text-white"
-                  : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-              }`}
-            >
-              {s}
-            </button>
-          ))}
-        </div>
-      </div>
+      {/* Grade / Subject / Unit */}
+      <GradeSubjectUnitSelect
+        gradeId={gradeId}
+        subjectId={subjectId}
+        unitId={unitId}
+        semester={semester}
+        onGradeChange={setGradeId}
+        onSubjectChange={setSubjectId}
+        onUnitChange={setUnitId}
+        onSemesterChange={setSemester}
+        applyUserDefaults
+      />
 
       {/* Table */}
       <div className="overflow-x-auto">
@@ -190,7 +176,7 @@ export default function EntryTable({
                     value={row.answer}
                     onChange={(e) => updateRow(row.id, "answer", e.target.value)}
                     onBlur={async (e) => {
-                      if (isEnglish || !e.target.value.trim()) return;
+                      if (!e.target.value.trim()) return;
                       const rowData = rows.find((r) => r.id === row.id);
                       if (rowData?.prompt.trim()) return;
                       setPinyinLoading((p) => ({ ...p, [row.id]: true }));
@@ -292,7 +278,7 @@ export default function EntryTable({
         <input
           type="text"
           className="input-field"
-          placeholder="例如：三年级上, 第五单元"
+          placeholder="例如：易错, 动物类"
           value={globalTags}
           onChange={(e) => setGlobalTags(e.target.value)}
         />

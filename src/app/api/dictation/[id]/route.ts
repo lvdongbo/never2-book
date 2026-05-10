@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
-import { db, dictationWords, dictationSessionItems, dictationSessions } from "@/lib/db";
+import { db, dictationWords, dictationSessionItems, dictationSessions, grades, subjects, units } from "@/lib/db";
 import { requireAuth } from "@/lib/auth";
 import { eq, and } from "drizzle-orm";
+import { SEMESTERS } from "@/types";
 
 // GET - Get single dictation word
 export async function GET(
@@ -14,8 +15,32 @@ export async function GET(
     const wordId = parseInt(id);
 
     const rows = await db
-      .select()
+      .select({
+        id: dictationWords.id,
+        userId: dictationWords.userId,
+        subject: dictationWords.subject,
+        gradeId: dictationWords.gradeId,
+        subjectId: dictationWords.subjectId,
+        unitId: dictationWords.unitId,
+        semester: dictationWords.semester,
+        word: dictationWords.word,
+        prompt: dictationWords.prompt,
+        expectedAnswer: dictationWords.expectedAnswer,
+        wrongAnswer: dictationWords.wrongAnswer,
+        notes: dictationWords.notes,
+        tags: dictationWords.tags,
+        isMastered: dictationWords.isMastered,
+        createdAt: dictationWords.createdAt,
+        updatedAt: dictationWords.updatedAt,
+        gradeName: grades.name,
+        subjectName: subjects.name,
+        unitName: units.name,
+        unitSemester: units.semester,
+      })
       .from(dictationWords)
+      .leftJoin(grades, eq(dictationWords.gradeId, grades.id))
+      .leftJoin(subjects, eq(dictationWords.subjectId, subjects.id))
+      .leftJoin(units, eq(dictationWords.unitId, units.id))
       .where(
         and(eq(dictationWords.id, wordId), eq(dictationWords.userId, user.id))
       )
@@ -28,10 +53,14 @@ export async function GET(
       );
     }
 
+    const row = rows[0];
     const word = {
-      ...rows[0],
-      tags: JSON.parse(rows[0].tags || "[]"),
-      isMastered: rows[0].isMastered === 1,
+      ...row,
+      tags: JSON.parse(row.tags || "[]"),
+      isMastered: row.isMastered === 1,
+      grade: row.gradeName ? { id: row.gradeId, name: row.gradeName } : undefined,
+      subjectEntity: row.subjectName ? { id: row.subjectId, name: row.subjectName } : undefined,
+      unit: row.unitName ? { id: row.unitId, name: row.unitName, semester: row.unitSemester } : undefined,
     };
 
     return NextResponse.json({ success: true, data: word });
@@ -59,7 +88,6 @@ export async function PUT(
     const { id } = await params;
     const wordId = parseInt(id);
 
-    // Verify ownership
     const rows = await db
       .select({ id: dictationWords.id })
       .from(dictationWords)
@@ -78,14 +106,21 @@ export async function PUT(
     const body = await request.json();
     const updates: Record<string, unknown> = {};
 
-    if (body.subject !== undefined) {
-      if (!["语文", "英语"].includes(body.subject)) {
+    if (body.subject !== undefined) updates.subject = body.subject;
+    if (body.gradeId !== undefined) updates.gradeId = body.gradeId || null;
+    if (body.subjectId !== undefined) updates.subjectId = body.subjectId || null;
+    if (body.unitId !== undefined) updates.unitId = body.unitId || null;
+    if (body.semester !== undefined) {
+      if (
+        body.semester !== null &&
+        !SEMESTERS.includes(body.semester as (typeof SEMESTERS)[number])
+      ) {
         return NextResponse.json(
-          { success: false, message: "无效的科目" },
+          { success: false, message: "学期参数不合法" },
           { status: 400 }
         );
       }
-      updates.subject = body.subject;
+      updates.semester = body.semester || null;
     }
     if (body.word !== undefined) updates.word = body.word.trim();
     if (body.prompt !== undefined) updates.prompt = body.prompt;

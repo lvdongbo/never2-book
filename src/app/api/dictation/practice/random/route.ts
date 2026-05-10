@@ -4,6 +4,7 @@ import {
   dictationSessions,
   dictationSessionItems,
   dictationWords,
+  units,
 } from "@/lib/db";
 import { requireAuth } from "@/lib/auth";
 import { eq, and, sql } from "drizzle-orm";
@@ -21,10 +22,13 @@ export async function POST(request: Request) {
       orderBy = "random",
       orderDir = "desc",
       subject,
+      gradeId,
+      subjectId,
+      unitId,
+      semester,
       name,
     } = body;
 
-    // Get non-mastered dictation words with stats
     let query = db
       .select({
         id: dictationWords.id,
@@ -32,6 +36,7 @@ export async function POST(request: Request) {
         totalErrors: sql<number>`SUM(CASE WHEN ${dictationSessionItems.isCorrect} = 0 THEN 1 ELSE 0 END)`,
       })
       .from(dictationWords)
+      .leftJoin(units, eq(dictationWords.unitId, units.id))
       .leftJoin(
         dictationSessionItems,
         eq(dictationWords.id, dictationSessionItems.dictationWordId)
@@ -46,6 +51,18 @@ export async function POST(request: Request) {
 
     if (subject && ["语文", "英语"].includes(subject)) {
       query = query.where(eq(dictationWords.subject, subject)) as typeof query;
+    }
+    if (gradeId) {
+      query = query.where(eq(dictationWords.gradeId, gradeId)) as typeof query;
+    }
+    if (subjectId) {
+      query = query.where(eq(dictationWords.subjectId, subjectId)) as typeof query;
+    }
+    if (unitId) {
+      query = query.where(eq(dictationWords.unitId, unitId)) as typeof query;
+    }
+    if (semester) {
+      query = query.where(eq(units.semester, semester)) as typeof query;
     }
 
     let wordsWithStats = await query;
@@ -78,20 +95,18 @@ export async function POST(request: Request) {
 
     const selected = sorted.slice(0, Math.min(count, sorted.length));
 
-    // Create session
     const result = await db
       .insert(dictationSessions)
       .values({
         userId: user.id,
         name: name || `随机默写 ${new Date().toLocaleString("zh-CN")}`,
         isRandom: 1,
-        randomRules: JSON.stringify({ count, orderBy, orderDir, subject }),
+        randomRules: JSON.stringify({ count, orderBy, orderDir, subject, gradeId, subjectId, unitId, semester }),
       })
       .returning({ id: dictationSessions.id });
 
     const sessionId = result[0].id;
 
-    // Create session items
     await db.insert(dictationSessionItems).values(
       selected.map((w) => ({
         sessionId,

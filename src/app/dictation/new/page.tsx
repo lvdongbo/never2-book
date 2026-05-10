@@ -1,20 +1,19 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { Suspense, useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import DictationForm from "@/components/dictation/DictationForm";
 import ScanImport from "@/components/dictation/ScanImport";
 import EntryTable from "@/components/dictation/EntryTable";
-import type { CreateDictationWordInput, DictationSubject } from "@/types";
+import type { CreateDictationWordInput } from "@/types";
 
 type Mode = "single" | "batch" | "scan";
 
 interface ScanResult {
   entries: Array<{ prompt: string; answer: string }>;
-  subject: DictationSubject;
 }
 
-export default function NewDictationWordPage() {
+function NewDictationWordPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [mode, setMode] = useState<Mode>("single");
@@ -26,7 +25,6 @@ export default function NewDictationWordPage() {
     }
   }, [searchParams]);
 
-  // Scan flow state
   const [scanResult, setScanResult] = useState<ScanResult | null>(null);
 
   const handleSingleSubmit = async (data: CreateDictationWordInput) => {
@@ -88,7 +86,7 @@ export default function NewDictationWordPage() {
       )}
 
       {/* Batch mode */}
-      {mode === "batch" && <EntryTable subject="语文" initialEntries={[]} />}
+      {mode === "batch" && <EntryTable initialEntries={[]} />}
 
       {/* Scan mode: two-step */}
       {mode === "scan" && !scanResult && (
@@ -96,12 +94,19 @@ export default function NewDictationWordPage() {
       )}
       {mode === "scan" && scanResult && (
         <EntryTable
-          subject={scanResult.subject}
           initialEntries={scanResult.entries}
           showBack
           onBack={handleBackToScan}
         />
       )}
     </div>
+  );
+}
+
+export default function NewDictationWordPage() {
+  return (
+    <Suspense fallback={<div className="max-w-2xl mx-auto text-gray-500">加载中...</div>}>
+      <NewDictationWordPageContent />
+    </Suspense>
   );
 }

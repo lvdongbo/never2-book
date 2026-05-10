@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
-import { db, dictationWords } from "@/lib/db";
+import { db, dictationWords, subjects } from "@/lib/db";
 import { requireAuth } from "@/lib/auth";
+import { eq, and } from "drizzle-orm";
+import { SEMESTERS } from "@/types";
 
 interface BatchEntry {
   prompt: string;
@@ -15,15 +17,24 @@ export async function POST(request: Request) {
     const user = await requireAuth();
     const body = await request.json();
 
-    const { subject, entries, tags } = body as {
-      subject: string;
+    const { subject, subjectId, gradeId, unitId, semester, entries, tags } = body as {
+      subject?: string;
+      subjectId?: number;
+      gradeId?: number;
+      unitId?: number;
+      semester?: string;
       entries: BatchEntry[];
       tags?: string[];
     };
 
-    if (!subject || !["语文", "英语"].includes(subject)) {
+    if (
+      semester !== undefined &&
+      semester !== null &&
+      semester !== "" &&
+      !SEMESTERS.includes(semester as (typeof SEMESTERS)[number])
+    ) {
       return NextResponse.json(
-        { success: false, message: "请选择有效的科目" },
+        { success: false, message: "学期参数不合法" },
         { status: 400 }
       );
     }
@@ -35,7 +46,18 @@ export async function POST(request: Request) {
       );
     }
 
-    const globalTagsJson = JSON.stringify(tags || []);
+    // Resolve subject name
+    let subjectName = subject || "";
+    if (subjectId) {
+      const subjectRows = await db
+        .select({ name: subjects.name })
+        .from(subjects)
+        .where(and(eq(subjects.id, subjectId), eq(subjects.userId, user.id)))
+        .limit(1);
+      if (subjectRows.length > 0) {
+        subjectName = subjectRows[0].name;
+      }
+    }
 
     // Filter out empty entries and validate
     const valid = entries.filter((e) => e.prompt.trim() && e.answer.trim());
@@ -47,17 +69,19 @@ export async function POST(request: Request) {
       );
     }
 
-    // Batch insert with per-entry tags support
     const globalTagsArray: string[] = tags || [];
 
     await db.insert(dictationWords).values(
       valid.map((e) => {
-        // Merge per-entry tags with global tags
         const entryTags = e.tags && e.tags.length > 0 ? e.tags : [];
         const mergedTags = [...new Set([...globalTagsArray, ...entryTags])];
         return {
           userId: user.id,
-          subject,
+          subject: subjectName,
+          gradeId: gradeId ?? null,
+          subjectId: subjectId ?? null,
+          unitId: unitId ?? null,
+          semester: semester ?? null,
           word: e.answer.trim(),
           prompt: e.prompt.trim(),
           expectedAnswer: e.answer.trim(),

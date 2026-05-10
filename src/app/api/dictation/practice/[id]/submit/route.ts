@@ -65,7 +65,7 @@ export async function PUT(
         dictationWords,
         eq(dictationSessionItems.dictationWordId, dictationWords.id)
       )
-      .where(eq(dictationSessionItems.sessionId, sessionId));
+      .where(eq(dictationSessionItems.sessionId, sessionId)) as { itemId: number; expectedAnswer: string; subject: string }[];
 
     const itemMap = new Map(
       items.map((item) => [item.itemId, item])

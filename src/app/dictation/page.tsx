@@ -1,21 +1,88 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import Link from "next/link";
-import type { DictationWordWithStats } from "@/types";
+import type { DictationWordWithStats, Grade, SubjectEntity, Semester } from "@/types";
+
+interface UnitOption {
+  id: number;
+  name: string;
+  semester: string;
+  gradeId: number;
+  subjectId: number;
+}
 
 export default function DictationListPage() {
   const [words, setWords] = useState<DictationWordWithStats[]>([]);
   const [loading, setLoading] = useState(true);
-  const [subjectFilter, setSubjectFilter] = useState<string>("全部");
-  const [tagFilter, setTagFilter] = useState<string>("");
-  const [showMastered, setShowMastered] = useState(true);
   const [error, setError] = useState("");
+  const [showMastered, setShowMastered] = useState(true);
 
-  const fetchWords = async () => {
+  // Hierarchy filters
+  const [grades, setGrades] = useState<Grade[]>([]);
+  const [subjects, setSubjects] = useState<SubjectEntity[]>([]);
+  const [unitOptions, setUnitOptions] = useState<UnitOption[]>([]);
+  const [filterGradeId, setFilterGradeId] = useState("");
+  const [filterSemester, setFilterSemester] = useState<Semester | "">("");
+  const [filterSubjectId, setFilterSubjectId] = useState("");
+  const [filterUnitId, setFilterUnitId] = useState("");
+  const [tagFilter, setTagFilter] = useState<string>("");
+  const [defaultsReady, setDefaultsReady] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/settings")
+      .then((r) => r.json())
+      .then((d) => {
+        if (!d.success) return;
+        if (d.data?.currentGradeId) {
+          setFilterGradeId(String(d.data.currentGradeId));
+        }
+        if (d.data?.currentSemester) {
+          setFilterSemester(d.data.currentSemester as Semester);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setDefaultsReady(true));
+  }, []);
+
+  const fetchRefs = useCallback(async () => {
+    const [gRes, sRes] = await Promise.all([
+      fetch("/api/grades"),
+      fetch("/api/subjects"),
+    ]);
+    const g = await gRes.json();
+    const s = await sRes.json();
+    if (g.success) setGrades(g.data);
+    if (s.success) setSubjects(s.data);
+  }, []);
+
+  useEffect(() => { fetchRefs(); }, [fetchRefs]);
+
+  const fetchUnits = useCallback(async () => {
+    if (!defaultsReady) return;
+    if (!filterGradeId && !filterSubjectId) { setUnitOptions([]); return; }
+    const params = new URLSearchParams();
+    if (filterGradeId) params.set("gradeId", filterGradeId);
+    if (filterSubjectId) params.set("subjectId", filterSubjectId);
+    if (filterSemester) params.set("semester", filterSemester);
+    const res = await fetch("/api/units?" + params.toString());
+    const json = await res.json();
+    if (json.success) setUnitOptions(json.data);
+  }, [defaultsReady, filterGradeId, filterSubjectId, filterSemester]);
+
+  useEffect(() => { fetchUnits(); }, [fetchUnits]);
+
+  const fetchWords = useCallback(async () => {
+    if (!defaultsReady) return;
     setLoading(true);
     try {
-      const res = await fetch("/api/dictation");
+      const params = new URLSearchParams();
+      if (filterGradeId) params.set("gradeId", filterGradeId);
+      if (filterSubjectId) params.set("subjectId", filterSubjectId);
+      if (filterUnitId) params.set("unitId", filterUnitId);
+      if (filterSemester) params.set("semester", filterSemester);
+      if (tagFilter) params.set("tag", tagFilter);
+      const res = await fetch("/api/dictation?" + params.toString());
       const data = await res.json();
       if (data.success) {
         setWords(data.data);
@@ -27,13 +94,12 @@ export default function DictationListPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [defaultsReady, filterGradeId, filterSubjectId, filterUnitId, filterSemester, tagFilter]);
 
   useEffect(() => {
     fetchWords();
-  }, []);
+  }, [fetchWords]);
 
-  // Collect all unique tags from all words
   const allTags = useMemo(() => {
     const tagSet = new Set<string>();
     words.forEach((w) => w.tags?.forEach((t) => tagSet.add(t)));
@@ -70,8 +136,6 @@ export default function DictationListPage() {
   };
 
   const filtered = words.filter((w) => {
-    if (subjectFilter !== "全部" && w.subject !== subjectFilter) return false;
-    if (tagFilter && !w.tags?.includes(tagFilter)) return false;
     if (!showMastered && w.isMastered) return false;
     return true;
   });
@@ -145,24 +209,42 @@ export default function DictationListPage() {
 
       {/* Filters */}
       <div className="space-y-3 mb-6">
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex space-x-1 bg-gray-100 rounded-lg p-1">
-            {["全部", "语文", "英语"].map((s) => (
-              <button
-                key={s}
-                onClick={() => setSubjectFilter(s)}
-                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                  subjectFilter === s
-                    ? "bg-white text-primary-700 shadow-sm"
-                    : "text-gray-600 hover:text-gray-900"
-                }`}
-              >
-                {s}
-              </button>
-            ))}
-          </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <select
+            className="input-field py-1.5 text-sm w-auto"
+            value={filterGradeId}
+            onChange={(e) => { setFilterGradeId(e.target.value); setFilterUnitId(""); }}
+          >
+            <option value="">全部年级</option>
+            {grades.map((g) => (<option key={g.id} value={g.id}>{g.name}</option>))}
+          </select>
+          <select
+            className="input-field py-1.5 text-sm w-auto"
+            value={filterSemester}
+            onChange={(e) => { setFilterSemester((e.target.value as Semester | "") || ""); setFilterUnitId(""); }}
+          >
+            <option value="">全部学期</option>
+            <option value="上学期">上学期</option>
+            <option value="下学期">下学期</option>
+          </select>
+          <select
+            className="input-field py-1.5 text-sm w-auto"
+            value={filterSubjectId}
+            onChange={(e) => { setFilterSubjectId(e.target.value); setFilterUnitId(""); }}
+          >
+            <option value="">全部学科</option>
+            {subjects.map((s) => (<option key={s.id} value={s.id}>{s.name}</option>))}
+          </select>
+          <select
+            className="input-field py-1.5 text-sm w-auto"
+            value={filterUnitId}
+            onChange={(e) => setFilterUnitId(e.target.value)}
+          >
+            <option value="">全部单元</option>
+            {unitOptions.map((u) => (<option key={u.id} value={u.id}>{u.name} ({u.semester})</option>))}
+          </select>
 
-          <label className="flex items-center space-x-2 text-sm text-gray-600 cursor-pointer">
+          <label className="flex items-center space-x-2 text-sm text-gray-600 cursor-pointer ml-2">
             <input
               type="checkbox"
               checked={showMastered}
@@ -221,7 +303,17 @@ export default function DictationListPage() {
               <div className="flex items-start justify-between">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center space-x-2 mb-2">
-                    <span className="badge-blue">{word.subject}</span>
+                    {word.subjectEntity && (
+                      <span className="badge-blue">{word.subjectEntity.name}</span>
+                    )}
+                    {!word.subjectEntity && word.subject && (
+                      <span className="badge-blue">{word.subject}</span>
+                    )}
+                    {(word.grade?.name || word.semester || word.unit?.name) && (
+                      <span className="text-xs text-gray-500">
+                        {[word.grade?.name, word.semester, word.unit?.name].filter(Boolean).join("/")}
+                      </span>
+                    )}
                     {word.isMastered ? (
                       <span className="badge-green">已过关</span>
                     ) : (

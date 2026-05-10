@@ -72,6 +72,8 @@ export async function getCurrentUser(): Promise<User | null> {
         id: users.id,
         email: users.email,
         nickname: users.nickname,
+        currentGradeId: users.currentGradeId,
+        currentSemester: users.currentSemester,
         createdAt: users.createdAt,
       })
       .from(users)

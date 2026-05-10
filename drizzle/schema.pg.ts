@@ -6,6 +6,8 @@ export const users = pgTable("users", {
   email: text("email").notNull().unique(),
   passwordHash: text("password_hash").notNull(),
   nickname: text("nickname").notNull().default(""),
+  currentGradeId: integer("current_grade_id"),
+  currentSemester: text("current_semester"),
   createdAt: text("created_at")
     .notNull()
     .default(sql`now()`),
@@ -68,12 +70,70 @@ export const practiceSessionItems = pgTable("practice_session_items", {
 
 // ============ Dictation (默写) ============
 
+// ============ Reference Data ============
+
+export const grades = pgTable("grades", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`now()`),
+  updatedAt: text("updated_at")
+    .notNull()
+    .default(sql`now()`),
+});
+
+export const subjects = pgTable("subjects", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`now()`),
+  updatedAt: text("updated_at")
+    .notNull()
+    .default(sql`now()`),
+});
+
+export const units = pgTable("units", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  gradeId: integer("grade_id")
+    .notNull()
+    .references(() => grades.id, { onDelete: "cascade" }),
+  subjectId: integer("subject_id")
+    .notNull()
+    .references(() => subjects.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  semester: text("semester").notNull(),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`now()`),
+  updatedAt: text("updated_at")
+    .notNull()
+    .default(sql`now()`),
+});
+
 export const dictationWords = pgTable("dictation_words", {
   id: serial("id").primaryKey(),
   userId: integer("user_id")
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
   subject: text("subject").notNull(),
+  gradeId: integer("grade_id").references(() => grades.id, { onDelete: "set null" }),
+  subjectId: integer("subject_id").references(() => subjects.id, { onDelete: "set null" }),
+  unitId: integer("unit_id").references(() => units.id, { onDelete: "set null" }),
+  semester: text("semester"),
   word: text("word").notNull(),
   prompt: text("prompt").notNull().default(""),
   expectedAnswer: text("expected_answer").notNull(),

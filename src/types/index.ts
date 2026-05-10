@@ -6,6 +6,8 @@ export interface User {
   id: number;
   email: string;
   nickname: string;
+  currentGradeId: number | null;
+  currentSemester: Semester | null;
   createdAt: string;
 }
 
@@ -68,6 +70,45 @@ export interface CreateMistakeInput {
   explanationImages: string[];
 }
 
+// ============ Reference Data types ============
+
+export interface Grade {
+  id: number;
+  userId: number;
+  name: string;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SubjectEntity {
+  id: number;
+  userId: number;
+  name: string;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type Semester = "上学期" | "下学期";
+
+export const SEMESTERS: Semester[] = ["上学期", "下学期"];
+
+export interface Unit {
+  id: number;
+  userId: number;
+  gradeId: number;
+  subjectId: number;
+  name: string;
+  semester: Semester;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+  // Populated on join:
+  grade?: Grade;
+  subjectEntity?: SubjectEntity;
+}
+
 // ============ Dictation (默写) types ============
 
 export type DictationSubject = "语文" | "英语";
@@ -78,6 +119,10 @@ export interface DictationWord {
   id: number;
   userId: number;
   subject: DictationSubject;
+  gradeId: number | null;
+  subjectId: number | null;
+  unitId: number | null;
+  semester: Semester | null;
   word: string;
   prompt: string;
   expectedAnswer: string;
@@ -87,6 +132,10 @@ export interface DictationWord {
   isMastered: boolean;
   createdAt: string;
   updatedAt: string;
+  // Populated on join:
+  grade?: Grade;
+  subjectEntity?: SubjectEntity;
+  unit?: Unit;
 }
 
 export interface DictationWordWithStats extends DictationWord {
@@ -123,10 +172,18 @@ export interface DictationRandomRules {
   orderBy: "practices" | "errors" | "random";
   orderDir: "asc" | "desc";
   subject?: DictationSubject;
+  gradeId?: number;
+  subjectId?: number;
+  unitId?: number;
+  semester?: Semester;
 }
 
 export interface CreateDictationWordInput {
   subject: DictationSubject;
+  gradeId?: number | null;
+  subjectId?: number | null;
+  unitId?: number | null;
+  semester?: Semester | null;
   word: string;
   prompt: string;
   expectedAnswer: string;
