@@ -30,6 +30,7 @@ export async function GET(
 
     const word = {
       ...rows[0],
+      tags: JSON.parse(rows[0].tags || "[]"),
       isMastered: rows[0].isMastered === 1,
     };
 

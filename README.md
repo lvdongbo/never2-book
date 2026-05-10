@@ -12,6 +12,7 @@
 - **练习批改**：提交练习后由家长批改，记录正确/错误
 - **练习分析**：统计每道错题的练习次数、正确次数、错误次数、连续正确次数、正确率
 - **过关标记**：已掌握的错题可标记为"已过关"，不再参与练习
+- **拍照录入**：拍摄课本单词表照片，AI 自动识别并导入默写词库
 
 ## 技术栈
 
@@ -77,3 +78,6 @@ docker compose down
 | `JWT_SECRET` | JWT 签名密钥 | 内置默认值（生产环境请更换） |
 | `UPLOAD_DIR` | 图片上传目录 | `./data/uploads` |
 | `VOLCANO_ACCESS_KEY` | 火山云 OSS Access Key | 不配置则使用本地存储 |
+| `LLM_API_KEY` | Vision 模型 API Key（用于拍照录入 OCR） | 必填（使用拍照录入功能时） |
+| `LLM_BASE_URL` | Vision 模型 API 地址 | `https://dashscope.aliyuncs.com/compatible-mode/v1`（通义千问） |
+| `LLM_MODEL` | Vision 模型名称 | `qwen-vl-plus`（通义千问，推荐） |

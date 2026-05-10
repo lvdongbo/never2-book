@@ -22,6 +22,10 @@ services:
       - VOLCANO_BUCKET=${VOLCANO_BUCKET:-}
       - VOLCANO_ENDPOINT=${VOLCANO_ENDPOINT:-}
       - VOLCANO_REGION=${VOLCANO_REGION:-}
+      # LLM Vision API for photo scan import (optional)
+      - LLM_API_KEY=${LLM_API_KEY:-}
+      - LLM_BASE_URL=${LLM_BASE_URL:-}
+      - LLM_MODEL=${LLM_MODEL:-qwen-vl-plus}
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/auth/me"]

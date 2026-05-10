@@ -2,6 +2,13 @@ import { NextResponse } from "next/server";
 import { db, dictationWords } from "@/lib/db";
 import { requireAuth } from "@/lib/auth";
 
+interface BatchEntry {
+  prompt: string;
+  answer: string;
+  notes?: string;
+  tags?: string[];
+}
+
 // POST - Batch create dictation words
 export async function POST(request: Request) {
   try {
@@ -10,7 +17,7 @@ export async function POST(request: Request) {
 
     const { subject, entries, tags } = body as {
       subject: string;
-      entries: { prompt: string; answer: string; notes?: string }[];
+      entries: BatchEntry[];
       tags?: string[];
     };
 
@@ -28,6 +35,8 @@ export async function POST(request: Request) {
       );
     }
 
+    const globalTagsJson = JSON.stringify(tags || []);
+
     // Filter out empty entries and validate
     const valid = entries.filter((e) => e.prompt.trim() && e.answer.trim());
 
@@ -38,20 +47,25 @@ export async function POST(request: Request) {
       );
     }
 
-    const tagsJson = JSON.stringify(tags || []);
+    // Batch insert with per-entry tags support
+    const globalTagsArray: string[] = tags || [];
 
-    // Batch insert
     await db.insert(dictationWords).values(
-      valid.map((e) => ({
-        userId: user.id,
-        subject,
-        word: e.answer.trim(),
-        prompt: e.prompt.trim(),
-        expectedAnswer: e.answer.trim(),
-        wrongAnswer: "",
-        notes: e.notes?.trim() || "",
-        tags: tagsJson,
-      }))
+      valid.map((e) => {
+        // Merge per-entry tags with global tags
+        const entryTags = e.tags && e.tags.length > 0 ? e.tags : [];
+        const mergedTags = [...new Set([...globalTagsArray, ...entryTags])];
+        return {
+          userId: user.id,
+          subject,
+          word: e.answer.trim(),
+          prompt: e.prompt.trim(),
+          expectedAnswer: e.answer.trim(),
+          wrongAnswer: "",
+          notes: e.notes?.trim() || "",
+          tags: JSON.stringify(mergedTags),
+        };
+      })
     );
 
     return NextResponse.json({

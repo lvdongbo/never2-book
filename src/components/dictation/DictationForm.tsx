@@ -18,27 +18,26 @@ interface DictationFormProps {
   submitLabel?: string;
 }
 
-/** Field labels that adapt to the selected subject */
 const LABELS: Record<
   DictationSubject,
   {
-    prompt: string;
-    promptPlaceholder: string;
     answer: string;
     answerPlaceholder: string;
+    prompt: string;
+    promptPlaceholder: string;
   }
 > = {
   语文: {
+    answer: "汉字",
+    answerPlaceholder: "波澜壮阔",
     prompt: "拼音",
     promptPlaceholder: "bo lan zhuang kuo",
-    answer: "中文词语",
-    answerPlaceholder: "波澜壮阔",
   },
   英语: {
-    prompt: "中文释义",
-    promptPlaceholder: "美丽的",
-    answer: "英文单词",
+    answer: "英文",
     answerPlaceholder: "beautiful",
+    prompt: "中文",
+    promptPlaceholder: "美丽的",
   },
 };
 
@@ -57,6 +56,7 @@ export default function DictationForm({
     (initialData?.tags || []).join("，")
   );
   const [loading, setLoading] = useState(false);
+  const [pinyinLoading, setPinyinLoading] = useState(false);
   const [error, setError] = useState("");
 
   const parsedTags = useMemo(() => {
@@ -77,12 +77,12 @@ export default function DictationForm({
     e.preventDefault();
     setError("");
 
-    if (!prompt.trim()) {
-      setError("请输入" + labels.prompt);
-      return;
-    }
     if (!answer.trim()) {
       setError("请输入" + labels.answer);
+      return;
+    }
+    if (!prompt.trim()) {
+      setError("请输入" + labels.prompt);
       return;
     }
 
@@ -101,6 +101,24 @@ export default function DictationForm({
       setError(err instanceof Error ? err.message : "保存失败");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleAutoPinyin = async (value: string) => {
+    if (!value.trim() || prompt.trim()) return;
+    setPinyinLoading(true);
+    try {
+      const res = await fetch("/api/dictation/pinyin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: value.trim() }),
+      });
+      const r = await res.json();
+      if (r.success && r.data) setPrompt(r.data);
+    } catch {
+      // silent
+    } finally {
+      setPinyinLoading(false);
     }
   };
 
@@ -133,23 +151,7 @@ export default function DictationForm({
         </div>
       </div>
 
-      {/* Prompt */}
-      <div>
-        <label className="label" htmlFor="prompt">
-          {labels.prompt} <span className="text-red-400">*</span>
-        </label>
-        <p className="text-xs text-gray-400 mb-1">默写时展示给学生的内容</p>
-        <input
-          id="prompt"
-          type="text"
-          className="input-field"
-          placeholder={labels.promptPlaceholder}
-          value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
-        />
-      </div>
-
-      {/* Answer */}
+      {/* Answer — first */}
       <div>
         <label className="label" htmlFor="answer">
           {labels.answer} <span className="text-red-400">*</span>
@@ -164,7 +166,31 @@ export default function DictationForm({
           placeholder={labels.answerPlaceholder}
           value={answer}
           onChange={(e) => setAnswer(e.target.value)}
+          onBlur={(e) => handleAutoPinyin(e.target.value)}
         />
+      </div>
+
+      {/* Prompt — second */}
+      <div>
+        <label className="label" htmlFor="prompt">
+          {labels.prompt} <span className="text-red-400">*</span>
+        </label>
+        <p className="text-xs text-gray-400 mb-1">默写时展示给学生的提示内容</p>
+        <div className="relative">
+          <input
+            id="prompt"
+            type="text"
+            className="input-field"
+            placeholder={labels.promptPlaceholder}
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+          />
+          {pinyinLoading && (
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">
+              转换中...
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Notes */}
