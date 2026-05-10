@@ -4,3 +4,7 @@ data/
 *.db
 .env.local
 .env.production
+*.tsbuildinfo
+.claude/
+scripts/
+nul

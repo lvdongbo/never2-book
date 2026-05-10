@@ -35,6 +35,17 @@ export async function GET(request: Request) {
       );
     }
 
+    const statsSubquery = db
+      .select({
+        wordId: dictationSessionItems.dictationWordId,
+        totalPractices: sql<number>`COUNT(DISTINCT ${dictationSessionItems.id})`,
+        totalCorrect: sql<number>`SUM(CASE WHEN ${dictationSessionItems.isCorrect} = 1 THEN 1 ELSE 0 END)`,
+        totalWrong: sql<number>`SUM(CASE WHEN ${dictationSessionItems.isCorrect} = 0 THEN 1 ELSE 0 END)`,
+      })
+      .from(dictationSessionItems)
+      .groupBy(dictationSessionItems.dictationWordId)
+      .as("stats");
+
     const query = db
       .select({
         id: dictationWords.id,
@@ -57,20 +68,16 @@ export async function GET(request: Request) {
         subjectName: subjects.name,
         unitName: units.name,
         unitSemester: units.semester,
-        totalPractices: sql<number>`COUNT(DISTINCT ${dictationSessionItems.id})`,
-        totalCorrect: sql<number>`SUM(CASE WHEN ${dictationSessionItems.isCorrect} = 1 THEN 1 ELSE 0 END)`,
-        totalWrong: sql<number>`SUM(CASE WHEN ${dictationSessionItems.isCorrect} = 0 THEN 1 ELSE 0 END)`,
+        totalPractices: sql<number>`COALESCE(${statsSubquery.totalPractices}, 0)`,
+        totalCorrect: sql<number>`COALESCE(${statsSubquery.totalCorrect}, 0)`,
+        totalWrong: sql<number>`COALESCE(${statsSubquery.totalWrong}, 0)`,
       })
       .from(dictationWords)
       .leftJoin(grades, eq(dictationWords.gradeId, grades.id))
       .leftJoin(subjects, eq(dictationWords.subjectId, subjects.id))
       .leftJoin(units, eq(dictationWords.unitId, units.id))
-      .leftJoin(
-        dictationSessionItems,
-        eq(dictationWords.id, dictationSessionItems.dictationWordId)
-      )
+      .leftJoin(statsSubquery, eq(dictationWords.id, statsSubquery.wordId))
       .where(and(...filters))
-      .groupBy(dictationWords.id)
       .orderBy(sql`${dictationWords.updatedAt} DESC`);
 
     const rows = await query;
