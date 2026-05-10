@@ -38,9 +38,9 @@ export async function GET(request: Request) {
     const statsSubquery = db
       .select({
         wordId: dictationSessionItems.dictationWordId,
-        totalPractices: sql<number>`COUNT(DISTINCT ${dictationSessionItems.id})`,
-        totalCorrect: sql<number>`SUM(CASE WHEN ${dictationSessionItems.isCorrect} = 1 THEN 1 ELSE 0 END)`,
-        totalWrong: sql<number>`SUM(CASE WHEN ${dictationSessionItems.isCorrect} = 0 THEN 1 ELSE 0 END)`,
+        totalPractices: sql<number>`COUNT(DISTINCT ${dictationSessionItems.id})`.as("total_practices"),
+        totalCorrect: sql<number>`SUM(CASE WHEN ${dictationSessionItems.isCorrect} = 1 THEN 1 ELSE 0 END)`.as("total_correct"),
+        totalWrong: sql<number>`SUM(CASE WHEN ${dictationSessionItems.isCorrect} = 0 THEN 1 ELSE 0 END)`.as("total_wrong"),
       })
       .from(dictationSessionItems)
       .groupBy(dictationSessionItems.dictationWordId)
