@@ -162,7 +162,7 @@ export interface DictationSessionItem {
   sessionId: number;
   dictationWordId: number;
   userAnswer: string;
-  isCorrect: number | null; // null=未提交, 0=错误, 1=正确
+  isCorrect: number | null; // null=待家长批改, 0=错误, 1=正确
   createdAt: string;
   word?: DictationWord;
 }

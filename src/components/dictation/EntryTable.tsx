@@ -92,6 +92,7 @@ export default function EntryTable({
           subjectId,
           gradeId,
           unitId,
+          semester,
           entries: rows
             .filter((r) => r.answer.trim())
             .map((r) => ({

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
@@ -81,47 +81,6 @@ const navSections: NavSection[] = [
     ],
   },
   {
-    label: "基础设置",
-    items: [
-      {
-        href: "/settings",
-        label: "个人设置",
-        icon: (
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.121 17.804A9.955 9.955 0 0112 15c2.264 0 4.352.75 6.029 2.014M15 11a3 3 0 11-6 0 3 3 0 016 0zm6 1a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-        ),
-      },
-      {
-        href: "/grades",
-        label: "年级管理",
-        icon: (
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-          </svg>
-        ),
-      },
-      {
-        href: "/subjects",
-        label: "学科管理",
-        icon: (
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-          </svg>
-        ),
-      },
-      {
-        href: "/units",
-        label: "单元管理",
-        icon: (
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-          </svg>
-        ),
-      },
-    ],
-  },
-  {
     label: "统计分析",
     items: [
       {
@@ -142,6 +101,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [settingsMenuOpen, setSettingsMenuOpen] = useState(false);
+  const settingsMenuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     fetch("/api/auth/me")
@@ -152,6 +113,22 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         }
       })
       .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        settingsMenuRef.current &&
+        !settingsMenuRef.current.contains(event.target as Node)
+      ) {
+        setSettingsMenuOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
   }, []);
 
   const handleLogout = async () => {
@@ -249,13 +226,64 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           {/* User area */}
           <div className="p-4 border-t border-gray-100">
             <div className="flex items-center justify-between">
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-gray-900 truncate">
-                  {user?.nickname || user?.email || "用户"}
-                </p>
-                <p className="text-xs text-gray-400 truncate">
-                  {user?.email || ""}
-                </p>
+              <div className="relative flex-1 min-w-0" ref={settingsMenuRef}>
+                <button
+                  type="button"
+                  onClick={() => setSettingsMenuOpen((prev) => !prev)}
+                  className="w-full text-left rounded-lg px-2 py-1.5 hover:bg-gray-50 transition-colors"
+                >
+                  <p className="text-sm font-medium text-gray-900 truncate">
+                    {user?.nickname || user?.email || "用户"}
+                  </p>
+                  <p className="text-xs text-gray-400 truncate">
+                    {user?.email || ""}
+                  </p>
+                </button>
+
+                {settingsMenuOpen && (
+                  <div className="absolute left-0 bottom-full mb-2 w-52 rounded-lg border border-gray-200 bg-white shadow-lg py-1 z-40">
+                    <Link
+                      href="/settings"
+                      className="block px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                      onClick={() => {
+                        setSettingsMenuOpen(false);
+                        setSidebarOpen(false);
+                      }}
+                    >
+                      个人设置
+                    </Link>
+                    <Link
+                      href="/grades"
+                      className="block px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                      onClick={() => {
+                        setSettingsMenuOpen(false);
+                        setSidebarOpen(false);
+                      }}
+                    >
+                      年级管理
+                    </Link>
+                    <Link
+                      href="/subjects"
+                      className="block px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                      onClick={() => {
+                        setSettingsMenuOpen(false);
+                        setSidebarOpen(false);
+                      }}
+                    >
+                      学科管理
+                    </Link>
+                    <Link
+                      href="/units"
+                      className="block px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                      onClick={() => {
+                        setSettingsMenuOpen(false);
+                        setSidebarOpen(false);
+                      }}
+                    >
+                      单元管理
+                    </Link>
+                  </div>
+                )}
               </div>
               <button
                 onClick={handleLogout}

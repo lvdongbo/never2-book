@@ -1,16 +1,11 @@
 import { NextResponse } from "next/server";
-import {
-  db,
-  dictationSessions,
-  dictationSessionItems,
-  dictationWords,
-} from "@/lib/db";
+import { db, dictationSessions, dictationSessionItems } from "@/lib/db";
 import { requireAuth } from "@/lib/auth";
 import { eq, and } from "drizzle-orm";
 
-// PUT - Submit answers and auto-grade (English only; Chinese skips auto-grade)
+// PUT - Submit session for manual grading
 export async function PUT(
-  request: Request,
+  _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
@@ -18,7 +13,6 @@ export async function PUT(
     const { id } = await params;
     const sessionId = parseInt(id);
 
-    // Check session ownership
     const session = await db
       .select({ id: dictationSessions.id, status: dictationSessions.status })
       .from(dictationSessions)
@@ -44,85 +38,6 @@ export async function PUT(
       );
     }
 
-    const { answers } = await request.json();
-
-    if (!answers || typeof answers !== "object") {
-      return NextResponse.json(
-        { success: false, message: "请提供答案" },
-        { status: 400 }
-      );
-    }
-
-    // Get all items with subject info for auto-grading decisions
-    const items = await db
-      .select({
-        itemId: dictationSessionItems.id,
-        expectedAnswer: dictationWords.expectedAnswer,
-        subject: dictationWords.subject,
-      })
-      .from(dictationSessionItems)
-      .innerJoin(
-        dictationWords,
-        eq(dictationSessionItems.dictationWordId, dictationWords.id)
-      )
-      .where(eq(dictationSessionItems.sessionId, sessionId)) as { itemId: number; expectedAnswer: string; subject: string }[];
-
-    const itemMap = new Map(
-      items.map((item) => [item.itemId, item])
-    );
-
-    let correctCount = 0;
-    let totalGraded = 0;
-
-    // Grade each answer
-    for (const [itemIdStr, userAnswer] of Object.entries(answers)) {
-      const itemId = parseInt(itemIdStr);
-      const item = itemMap.get(itemId);
-
-      if (!item) continue;
-
-      const answerStr = String(userAnswer);
-
-      if (item.subject === "语文") {
-        // Chinese: handwriting canvas - store image, skip auto-grade
-        await db
-          .update(dictationSessionItems)
-          .set({
-            userAnswer: answerStr,
-            isCorrect: null, // ungraded, needs manual review
-          })
-          .where(
-            and(
-              eq(dictationSessionItems.id, itemId),
-              eq(dictationSessionItems.sessionId, sessionId)
-            )
-          );
-      } else {
-        // English: auto-grade by string comparison
-        totalGraded++;
-        const isCorrect =
-          answerStr.trim().toLowerCase() ===
-          item.expectedAnswer.trim().toLowerCase()
-            ? 1
-            : 0;
-        if (isCorrect) correctCount++;
-
-        await db
-          .update(dictationSessionItems)
-          .set({
-            userAnswer: answerStr,
-            isCorrect,
-          })
-          .where(
-            and(
-              eq(dictationSessionItems.id, itemId),
-              eq(dictationSessionItems.sessionId, sessionId)
-            )
-          );
-      }
-    }
-
-    // Update session status to submitted
     await db
       .update(dictationSessions)
       .set({
@@ -131,24 +46,21 @@ export async function PUT(
       })
       .where(eq(dictationSessions.id, sessionId));
 
-    // Count ungraded items (Chinese)
-    const ungradedItems = await db
-      .select({ id: dictationSessionItems.id })
+    const items = await db
+      .select({ isCorrect: dictationSessionItems.isCorrect })
       .from(dictationSessionItems)
-      .where(
-        and(
-          eq(dictationSessionItems.sessionId, sessionId),
-          eq(dictationSessionItems.isCorrect, null as unknown as number)
-        )
-      );
-    const ungradedCount = ungradedItems.length;
+      .where(eq(dictationSessionItems.sessionId, sessionId));
+
+    const totalCount = items.length;
+    const correctCount = items.filter((item) => item.isCorrect === 1).length;
+    const ungradedCount = items.filter((item) => item.isCorrect === null).length;
 
     return NextResponse.json({
       success: true,
-      message: `提交完成！自动批改正确 ${correctCount} / ${totalGraded}，${ungradedCount} 道手写题待批改`,
+      message: "已提交，等待家长批改",
       data: {
         correctCount,
-        totalCount: items.length,
+        totalCount,
         ungradedCount,
       },
     });

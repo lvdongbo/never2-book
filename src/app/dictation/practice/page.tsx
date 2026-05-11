@@ -142,10 +142,12 @@ export default function DictationPracticeListPage() {
                   </div>
                   <div className="text-xs text-gray-500">
                     {session.status === "submitted"
-                      ? `正确 ${session.correctItems} / ${session.gradedItems}` +
-                        (session.ungradedItems > 0
-                          ? ` · ${session.ungradedItems} 题待批改`
-                          : "")
+                      ? session.gradedItems === 0
+                        ? `待批改 ${session.ungradedItems} 题`
+                        : `已批 ${session.gradedItems}/${session.totalItems}，正确 ${session.correctItems}` +
+                          (session.ungradedItems > 0
+                            ? ` · ${session.ungradedItems} 题待批改`
+                            : "")
                       : `${session.totalItems} 个词待默写`}
                     {" · "}
                     {new Date(session.createdAt).toLocaleString("zh-CN")}

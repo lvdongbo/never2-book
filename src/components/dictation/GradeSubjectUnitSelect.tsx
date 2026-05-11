@@ -132,6 +132,18 @@ export default function GradeSubjectUnitSelect({
           ))}
         </select>
       </div>
+      <div className="flex-1 min-w-[160px]">
+        <label className="label text-xs">学期</label>
+        <select
+          className="input-field py-1.5 text-sm"
+          value={semester ?? ""}
+          onChange={(e) => handleSemesterChange(e.target.value)}
+        >
+          <option value="">不限</option>
+          <option value="上学期">上学期</option>
+          <option value="下学期">下学期</option>
+        </select>
+      </div>
       <div className="flex-1 min-w-[120px]">
         <label className="label text-xs">学科</label>
         <select
@@ -143,18 +155,6 @@ export default function GradeSubjectUnitSelect({
           {subjects.map((s) => (
             <option key={s.id} value={s.id}>{s.name}</option>
           ))}
-        </select>
-      </div>
-      <div className="flex-1 min-w-[160px]">
-        <label className="label text-xs">学期</label>
-        <select
-          className="input-field py-1.5 text-sm"
-          value={semester ?? ""}
-          onChange={(e) => handleSemesterChange(e.target.value)}
-        >
-          <option value="">不限</option>
-          <option value="上学期">上学期</option>
-          <option value="下学期">下学期</option>
         </select>
       </div>
       <div className="flex-1 min-w-[160px]">

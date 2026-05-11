@@ -32,6 +32,13 @@ export async function PUT(
       );
     }
 
+    if (session[0].status !== "submitted") {
+      return NextResponse.json(
+        { success: false, message: "练习未提交，暂不可批改" },
+        { status: 400 }
+      );
+    }
+
     const { itemId, isCorrect } = await request.json();
 
     if (itemId === undefined || isCorrect === undefined) {
