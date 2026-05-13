@@ -368,10 +368,10 @@ export default function DictationPracticePage() {
               ) : (
                 <div>
                   <p className="text-sm text-gray-500">
-                    {item.word.subject === "语文" ? "当前汉字" : "当前单词"}
+                    {item.word.subject === "语文" ? "当前拼音" : "当前中文释义"}
                   </p>
                   <p className="text-lg text-gray-900 font-medium">
-                    {item.word.word || "（未设置）"}
+                    {item.word.prompt || "（未设置）"}
                   </p>
                 </div>
               )}
