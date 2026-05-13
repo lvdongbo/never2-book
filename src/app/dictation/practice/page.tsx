@@ -132,23 +132,26 @@ export default function DictationPracticeListPage() {
                     )}
                     <span
                       className={`text-xs px-2 py-0.5 rounded-full ${
-                        session.status === "submitted"
-                          ? "bg-green-100 text-green-700"
+                        session.status === "graded"
+                          ? "bg-blue-100 text-blue-700"
+                          : session.status === "submitted"
+                          ? "bg-orange-100 text-orange-700"
                           : "bg-yellow-100 text-yellow-700"
                       }`}
                     >
-                      {session.status === "submitted" ? "已提交" : "进行中"}
+                      {session.status === "graded"
+                        ? "已批改"
+                        : session.status === "submitted"
+                        ? "待批改"
+                        : "进行中"}
                     </span>
                   </div>
                   <div className="text-xs text-gray-500">
-                    {session.status === "submitted"
-                      ? session.gradedItems === 0
-                        ? `待批改 ${session.ungradedItems} 题`
-                        : `已批 ${session.gradedItems}/${session.totalItems}，正确 ${session.correctItems}` +
-                          (session.ungradedItems > 0
-                            ? ` · ${session.ungradedItems} 题待批改`
-                            : "")
-                      : `${session.totalItems} 个词待默写`}
+                    {session.status === "in_progress"
+                      ? `${session.totalItems} 个词待默写`
+                      : session.status === "graded"
+                      ? `已批改 ${session.gradedItems}/${session.totalItems}，正确 ${session.correctItems}`
+                      : `待批改 ${session.ungradedItems} 题`}
                     {" · "}
                     {new Date(session.createdAt).toLocaleString("zh-CN")}
                   </div>

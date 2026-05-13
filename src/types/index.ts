@@ -151,7 +151,7 @@ export interface DictationSession {
   name: string;
   isRandom: boolean;
   randomRules: DictationRandomRules | null;
-  status: "in_progress" | "submitted";
+  status: "in_progress" | "submitted" | "graded";
   createdAt: string;
   updatedAt: string;
   items?: DictationSessionItem[];
