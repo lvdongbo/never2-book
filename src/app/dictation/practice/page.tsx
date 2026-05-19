@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
@@ -25,7 +25,7 @@ export default function DictationPracticeListPage() {
   const router = useRouter();
   const [sessions, setSessions] = useState<SessionWithCount[]>([]);
   const [subjects, setSubjects] = useState<SubjectOption[]>([]);
-  const [startSubjectId, setStartSubjectId] = useState("");
+  const [startMenuOpen, setStartMenuOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [subjectError, setSubjectError] = useState("");
@@ -44,15 +44,82 @@ export default function DictationPracticeListPage() {
     }
   };
 
+  const startMenuRef = useRef<HTMLDivElement | null>(null);
+
   const handleStartBySubject = (subjectId: string) => {
     if (!subjectId) return;
+    setStartMenuOpen(false);
     router.push(`/dictation/practice/new?subjectId=${subjectId}`);
   };
 
-  const handleStartChange = (value: string) => {
-    setStartSubjectId(value);
-    handleStartBySubject(value);
-  };
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        startMenuRef.current &&
+        !startMenuRef.current.contains(event.target as Node)
+      ) {
+        setStartMenuOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
+
+  const renderStartDropdown = (fullWidth = false) => (
+    <div
+      ref={startMenuRef}
+      className={`relative ${fullWidth ? "w-full" : "w-32"}`}
+    >
+      <button
+        type="button"
+        onClick={() => setStartMenuOpen((prev) => !prev)}
+        disabled={subjects.length === 0}
+        className={`btn-primary inline-flex items-center justify-between w-full ${
+          subjects.length === 0 ? "opacity-50 cursor-not-allowed" : ""
+        }`}
+      >
+        <span>开始默写</span>
+        <svg
+          className={`w-4 h-4 ml-2 transition-transform ${
+            startMenuOpen ? "rotate-180" : ""
+          }`}
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M19 9l-7 7-7-7"
+          />
+        </svg>
+      </button>
+
+      {startMenuOpen && subjects.length > 0 && (
+        <div className="absolute z-20 mt-2 w-full bg-white border border-gray-200 rounded-lg shadow-lg py-1">
+          {subjects.map((subject) => (
+            <button
+              key={subject.id}
+              type="button"
+              onClick={() => handleStartBySubject(String(subject.id))}
+              className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+            >
+              {subject.name}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
+  const renderStartDisabledHint = () =>
+    subjects.length === 0 ? (
+      <p className="text-xs text-gray-400 mt-2">暂无学科，请先在学科管理中添加</p>
+    ) : null;
 
   const fetchSessions = async () => {
     setLoading(true);
@@ -113,19 +180,8 @@ export default function DictationPracticeListPage() {
           </p>
         </div>
         <div className="mt-3 sm:mt-0">
-          <select
-            className="input-field py-2 text-sm w-56"
-            value={startSubjectId}
-            onChange={(e) => handleStartChange(e.target.value)}
-            disabled={subjects.length === 0}
-          >
-            <option value="">选择学科开始默写</option>
-            {subjects.map((subject) => (
-              <option key={subject.id} value={subject.id}>
-                {subject.name}
-              </option>
-            ))}
-          </select>
+          {renderStartDropdown()}
+          {renderStartDisabledHint()}
         </div>
       </div>
 
@@ -145,19 +201,8 @@ export default function DictationPracticeListPage() {
         <div className="card text-center py-12">
           <p className="text-gray-400 mb-4">暂无默写练习记录</p>
           <div className="max-w-xs mx-auto">
-            <select
-              className="input-field py-2 text-sm w-full"
-              value={startSubjectId}
-              onChange={(e) => handleStartChange(e.target.value)}
-              disabled={subjects.length === 0}
-            >
-              <option value="">选择学科开始默写</option>
-              {subjects.map((subject) => (
-                <option key={subject.id} value={subject.id}>
-                  {subject.name}
-                </option>
-              ))}
-            </select>
+            {renderStartDropdown(true)}
+            {renderStartDisabledHint()}
           </div>
         </div>
       ) : (
