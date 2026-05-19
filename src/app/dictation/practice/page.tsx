@@ -1,7 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
+
+interface SubjectOption {
+  id: number;
+  name: string;
+}
 
 interface SessionWithCount {
   id: number;
@@ -16,9 +22,37 @@ interface SessionWithCount {
 }
 
 export default function DictationPracticeListPage() {
+  const router = useRouter();
   const [sessions, setSessions] = useState<SessionWithCount[]>([]);
+  const [subjects, setSubjects] = useState<SubjectOption[]>([]);
+  const [startSubjectId, setStartSubjectId] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [subjectError, setSubjectError] = useState("");
+
+  const fetchSubjects = async () => {
+    try {
+      const res = await fetch("/api/subjects");
+      const data = await res.json();
+      if (data.success) {
+        setSubjects(data.data);
+      } else {
+        setSubjectError(data.message || "加载学科失败");
+      }
+    } catch {
+      setSubjectError("加载学科失败");
+    }
+  };
+
+  const handleStartBySubject = (subjectId: string) => {
+    if (!subjectId) return;
+    router.push(`/dictation/practice/new?subjectId=${subjectId}`);
+  };
+
+  const handleStartChange = (value: string) => {
+    setStartSubjectId(value);
+    handleStartBySubject(value);
+  };
 
   const fetchSessions = async () => {
     setLoading(true);
@@ -58,6 +92,7 @@ export default function DictationPracticeListPage() {
 
   useEffect(() => {
     fetchSessions();
+    fetchSubjects();
   }, []);
 
   if (loading) {
@@ -77,25 +112,21 @@ export default function DictationPracticeListPage() {
             共 {sessions.length} 次练习记录
           </p>
         </div>
-        <Link
-          href="/dictation/practice/new"
-          className="btn-primary mt-3 sm:mt-0 inline-flex items-center space-x-1"
-        >
-          <svg
-            className="w-4 h-4"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
+        <div className="mt-3 sm:mt-0">
+          <select
+            className="input-field py-2 text-sm w-56"
+            value={startSubjectId}
+            onChange={(e) => handleStartChange(e.target.value)}
+            disabled={subjects.length === 0}
           >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M12 4v16m8-8H4"
-            />
-          </svg>
-          <span>开始默写</span>
-        </Link>
+            <option value="">选择学科开始默写</option>
+            {subjects.map((subject) => (
+              <option key={subject.id} value={subject.id}>
+                {subject.name}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {error && (
@@ -104,12 +135,30 @@ export default function DictationPracticeListPage() {
         </div>
       )}
 
+      {subjectError && (
+        <div className="bg-yellow-50 border border-yellow-200 text-yellow-700 px-4 py-3 rounded-lg mb-4 text-sm">
+          {subjectError}
+        </div>
+      )}
+
       {sessions.length === 0 ? (
         <div className="card text-center py-12">
           <p className="text-gray-400 mb-4">暂无默写练习记录</p>
-          <Link href="/dictation/practice/new" className="btn-primary">
-            开始第一次默写
-          </Link>
+          <div className="max-w-xs mx-auto">
+            <select
+              className="input-field py-2 text-sm w-full"
+              value={startSubjectId}
+              onChange={(e) => handleStartChange(e.target.value)}
+              disabled={subjects.length === 0}
+            >
+              <option value="">选择学科开始默写</option>
+              {subjects.map((subject) => (
+                <option key={subject.id} value={subject.id}>
+                  {subject.name}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
       ) : (
         <div className="space-y-3">

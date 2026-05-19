@@ -10,7 +10,7 @@ export async function GET(request: Request) {
   try {
     const user = await requireAuth();
     const { searchParams } = new URL(request.url);
-    const tagFilter = searchParams.get("tag");
+    const tagFilters = searchParams.getAll("tag").filter(Boolean);
     const gradeFilter = searchParams.get("gradeId");
     const subjectFilter = searchParams.get("subjectId");
     const unitFilter = searchParams.get("unitId");
@@ -26,8 +26,13 @@ export async function GET(request: Request) {
     if (unitFilter) {
       filters.push(eq(dictationWords.unitId, parseInt(unitFilter)));
     }
-    if (tagFilter) {
-      filters.push(like(dictationWords.tags, `%\"${tagFilter}\"%`));
+    if (tagFilters.length > 0) {
+      filters.push(
+        sql`(${sql.join(
+          tagFilters.map((tag) => like(dictationWords.tags, `%\"${tag}\"%`)),
+          sql` OR `
+        )})`
+      );
     }
     if (semesterFilter) {
       filters.push(

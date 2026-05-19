@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type { DictationWordWithStats, DictationRandomRules, Grade, SubjectEntity, Semester } from "@/types";
@@ -16,6 +16,7 @@ interface UnitOption {
 export default function NewDictationPracticePage() {
   const router = useRouter();
   const [words, setWords] = useState<DictationWordWithStats[]>([]);
+  const [initialSubjectId, setInitialSubjectId] = useState("");
   const [loading, setLoading] = useState(true);
   const [mode, setMode] = useState<"manual" | "random">("manual");
   const [selected, setSelected] = useState<Set<number>>(new Set());
@@ -30,6 +31,7 @@ export default function NewDictationPracticePage() {
   const [filterSubjectId, setFilterSubjectId] = useState("");
   const [filterUnitId, setFilterUnitId] = useState("");
   const [filterSemester, setFilterSemester] = useState<Semester | "">("");
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [defaultsReady, setDefaultsReady] = useState(false);
 
   // Random generation state
@@ -42,6 +44,16 @@ export default function NewDictationPracticePage() {
   const [randomSubjectId, setRandomSubjectId] = useState("");
   const [randomUnitId, setRandomUnitId] = useState("");
   const [randomSemester, setRandomSemester] = useState<Semester | "">("");
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const subjectId = params.get("subjectId") || "";
+    if (subjectId) {
+      setInitialSubjectId(subjectId);
+      setFilterSubjectId(subjectId);
+      setRandomSubjectId(subjectId);
+    }
+  }, []);
 
   useEffect(() => {
     fetch("/api/settings")
@@ -68,6 +80,12 @@ export default function NewDictationPracticePage() {
       .finally(() => setDefaultsReady(true));
   }, []);
 
+  useEffect(() => {
+    if (!initialSubjectId) return;
+    setFilterSubjectId(initialSubjectId);
+    setRandomSubjectId(initialSubjectId);
+  }, [initialSubjectId]);
+
   const fetchRefs = useCallback(async () => {
     const [gRes, sRes] = await Promise.all([
       fetch("/api/grades"),
@@ -76,13 +94,25 @@ export default function NewDictationPracticePage() {
     const g = await gRes.json();
     const s = await sRes.json();
     if (g.success) setGrades(g.data);
-    if (s.success) setSubjects(s.data);
-  }, []);
+    if (s.success) {
+      setSubjects(s.data);
+      if (s.data.length > 0 && !initialSubjectId) {
+        const firstSubjectId = String(s.data[0].id);
+        setFilterSubjectId(firstSubjectId);
+        setRandomSubjectId(firstSubjectId);
+      }
+    }
+  }, [initialSubjectId]);
 
   useEffect(() => { fetchRefs(); }, [fetchRefs]);
 
   const fetchWords = useCallback(async () => {
     if (!defaultsReady) return;
+    if (!filterSubjectId) {
+      setWords([]);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
       const params = new URLSearchParams();
@@ -134,7 +164,46 @@ export default function NewDictationPracticePage() {
       .catch(() => {});
   }, [randomGradeId, randomSubjectId, randomSemester]);
 
-  const filtered = words;
+  const allTags = useMemo(
+    () => Array.from(new Set(words.flatMap((word) => word.tags))).sort(),
+    [words]
+  );
+
+  const filtered = useMemo(() => {
+    if (selectedTags.length === 0) {
+      return words;
+    }
+    return words.filter((word) =>
+      word.tags.some((tag) => selectedTags.includes(tag))
+    );
+  }, [words, selectedTags]);
+
+  const toggleTag = (tag: string) => {
+    setSelectedTags((prev) =>
+      prev.includes(tag) ? prev.filter((item) => item !== tag) : [...prev, tag]
+    );
+  };
+
+  const clearTags = () => {
+    setSelectedTags([]);
+  };
+
+  const getSubjectName = (subjectId: string) => {
+    const subject = subjects.find((item) => String(item.id) === subjectId);
+    return subject?.name || "全部学科";
+  };
+
+  const buildSessionName = (
+    modeLabel: "手动默写" | "随机默写",
+    subjectId: string
+  ) => {
+    const subjectName = getSubjectName(subjectId);
+    return `${subjectName}-${modeLabel} ${new Date().toLocaleString("zh-CN")}`;
+  };
+
+  const pendingCount = filtered.length;
+
+  const randomSourceCount = words.length;
 
   const toggleSelect = (id: number) => {
     const newSelected = new Set(selected);
@@ -167,7 +236,7 @@ export default function NewDictationPracticePage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: `手动默写 ${new Date().toLocaleString("zh-CN")}`,
+          name: buildSessionName("手动默写", filterSubjectId),
           wordIds: Array.from(selected),
         }),
       });
@@ -200,6 +269,7 @@ export default function NewDictationPracticePage() {
           subjectId: randomSubjectId ? parseInt(randomSubjectId) : undefined,
           unitId: randomUnitId ? parseInt(randomUnitId) : undefined,
           semester: randomSemester || undefined,
+          name: buildSessionName("随机默写", randomSubjectId),
         }),
       });
       const data = await res.json();
@@ -222,8 +292,6 @@ export default function NewDictationPracticePage() {
       </div>
     );
   }
-
-  const pendingCount = words.length;
 
   return (
     <div className="max-w-3xl mx-auto">
@@ -279,7 +347,6 @@ export default function NewDictationPracticePage() {
                 <option value="下学期">下学期</option>
               </select>
               <select className="input-field py-1.5 text-sm w-auto" value={filterSubjectId} onChange={(e) => { setFilterSubjectId(e.target.value); setFilterUnitId(""); }}>
-                <option value="">全部学科</option>
                 {subjects.map((s) => (<option key={s.id} value={s.id}>{s.name}</option>))}
               </select>
               <select className="input-field py-1.5 text-sm w-auto" value={filterUnitId} onChange={(e) => setFilterUnitId(e.target.value)}>
@@ -303,6 +370,41 @@ export default function NewDictationPracticePage() {
             </div>
           </div>
 
+          {allTags.length > 0 && (
+            <div className="mb-4">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-sm text-gray-500">标签筛选（可多选）</p>
+                <button
+                  type="button"
+                  onClick={clearTags}
+                  className="text-xs text-gray-400 hover:text-gray-600"
+                  disabled={selectedTags.length === 0}
+                >
+                  清空标签
+                </button>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {allTags.map((tag) => {
+                  const active = selectedTags.includes(tag);
+                  return (
+                    <button
+                      type="button"
+                      key={tag}
+                      onClick={() => toggleTag(tag)}
+                      className={`px-2 py-1 rounded-full text-xs border transition-colors ${
+                        active
+                          ? "bg-purple-100 text-purple-700 border-purple-300"
+                          : "bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100"
+                      }`}
+                    >
+                      #{tag}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {/* Word selection */}
           {filtered.length === 0 ? (
             <div className="card text-center py-12">
@@ -314,6 +416,9 @@ export default function NewDictationPracticePage() {
               <Link href="/dictation/new" className="btn-primary mt-4 inline-block">
                 添加新默写词
               </Link>
+              {selectedTags.length > 0 && (
+                <p className="text-xs text-gray-400 mt-2">当前标签筛选下无结果，可清空标签后重试</p>
+              )}
             </div>
           ) : (
             <div className="space-y-3 mb-6">
@@ -467,7 +572,6 @@ export default function NewDictationPracticePage() {
                 <option value="下学期">下学期</option>
               </select>
               <select className="input-field py-1.5 text-sm w-auto" value={randomSubjectId} onChange={(e) => { setRandomSubjectId(e.target.value); setRandomUnitId(""); }}>
-                <option value="">全部学科</option>
                 {subjects.map((s) => (<option key={s.id} value={s.id}>{s.name}</option>))}
               </select>
               <select className="input-field py-1.5 text-sm w-auto" value={randomUnitId} onChange={(e) => setRandomUnitId(e.target.value)}>
@@ -480,11 +584,11 @@ export default function NewDictationPracticePage() {
           <button
             onClick={handleRandomCreate}
             className="btn-primary"
-            disabled={creating || pendingCount === 0}
+            disabled={creating || randomSourceCount === 0}
           >
             {creating
               ? "生成中..."
-              : `随机生成默写（从 ${pendingCount} 个词中抽取）`}
+              : `随机生成默写（从 ${randomSourceCount} 个词中抽取）`}
           </button>
         </div>
       )}
