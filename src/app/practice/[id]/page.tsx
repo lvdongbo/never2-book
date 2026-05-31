@@ -133,9 +133,17 @@ export default function DoPracticePage() {
       <div className="mb-6">
         <div className="flex items-center justify-between mb-2">
           <h2 className="text-xl font-bold text-gray-900">{session.name}</h2>
-          <span className="text-sm text-gray-500">
-            {currentIndex + 1} / {totalItems}
-          </span>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => router.push(`/print/practice/${id}`)}
+              className="btn-secondary text-sm"
+            >
+              打印
+            </button>
+            <span className="text-sm text-gray-500">
+              {currentIndex + 1} / {totalItems}
+            </span>
+          </div>
         </div>
         {/* Progress bar */}
         <div className="w-full bg-gray-200 rounded-full h-2">

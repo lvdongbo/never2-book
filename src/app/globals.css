@@ -100,3 +100,127 @@
 ::-webkit-scrollbar-thumb:hover {
   @apply bg-gray-400;
 }
+
+.print-sheet {
+  width: 100%;
+  max-width: 190mm;
+  padding: 10mm;
+  color: #111827;
+}
+
+.print-header {
+  margin-bottom: 6mm;
+  border-bottom: 1px solid #e5e7eb;
+  padding-bottom: 4mm;
+}
+
+.print-title {
+  font-size: 24px;
+  font-weight: 700;
+  margin-bottom: 2mm;
+}
+
+.print-meta {
+  font-size: 13px;
+  color: #4b5563;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 3mm;
+}
+
+.print-student-line {
+  font-size: 14px;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.print-question-block {
+  margin-bottom: 8mm;
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+.print-question-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 2mm;
+}
+
+.print-question-index {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.print-subject {
+  font-size: 12px;
+  background: #dbeafe;
+  color: #1e40af;
+  border-radius: 9999px;
+  padding: 2px 8px;
+}
+
+.print-question-text {
+  font-size: 14px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  margin-bottom: 3mm;
+}
+
+.print-image-list {
+  display: grid;
+  gap: 3mm;
+  margin-bottom: 3mm;
+}
+
+.print-question-image {
+  width: 100%;
+  max-width: 100%;
+  max-height: 80mm;
+  object-fit: contain;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+}
+
+.print-answer-area {
+  height: 56mm;
+  border: 1px dashed #9ca3af;
+  border-radius: 6px;
+}
+
+@media print {
+  @page {
+    size: A4;
+    margin: 10mm;
+  }
+
+  html,
+  body {
+    background: #ffffff;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  .print-page-wrapper {
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  .print-sheet {
+    max-width: none;
+    width: auto;
+    padding: 0;
+  }
+
+  .print-title {
+    font-size: 22px;
+  }
+
+  .print-question-text {
+    font-size: 14px;
+  }
+}
