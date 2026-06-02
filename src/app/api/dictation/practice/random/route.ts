@@ -8,28 +8,162 @@ import {
 } from "@/lib/db";
 import { requireAuth } from "@/lib/auth";
 import { eq, and, sql } from "drizzle-orm";
-import type { DictationRandomRules } from "@/types";
+import type { DictationRandomRules, DictationSubject, Semester } from "@/types";
+import { SEMESTERS } from "@/types";
+
+function parseOptionalPositiveInt(value: unknown): number | undefined | null {
+  if (value === undefined || value === null || value === "") {
+    return undefined;
+  }
+
+  if (typeof value === "number") {
+    if (!Number.isInteger(value) || value <= 0) {
+      return null;
+    }
+    return value;
+  }
+
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!/^\d+$/.test(trimmed)) {
+      return null;
+    }
+    const parsed = parseInt(trimmed, 10);
+    if (!Number.isInteger(parsed) || parsed <= 0) {
+      return null;
+    }
+    return parsed;
+  }
+
+  return null;
+}
 
 // POST - Generate a random dictation practice session
 export async function POST(request: Request) {
   try {
     const user = await requireAuth();
-    const body: DictationRandomRules & { name?: string } =
-      await request.json();
+    const rawBody = (await request.json()) as Record<string, unknown>;
 
-    const {
-      count = 10,
-      orderBy = "random",
-      orderDir = "desc",
-      subject,
-      gradeId,
-      subjectId,
-      unitId,
-      semester,
-      name,
-    } = body;
+    const countInput = rawBody.count;
+    const countParsed = parseOptionalPositiveInt(countInput);
+    if (countParsed === null) {
+      return NextResponse.json(
+        { success: false, message: "题目数量必须是正整数" },
+        { status: 400 }
+      );
+    }
+    const count = Math.max(1, Math.min(50, countParsed ?? 10));
 
-    let query = db
+    const orderByInput = rawBody.orderBy;
+    const validOrderBy: DictationRandomRules["orderBy"][] = [
+      "practices",
+      "errors",
+      "random",
+    ];
+    const orderBy =
+      orderByInput === undefined
+        ? "random"
+        : (orderByInput as DictationRandomRules["orderBy"]);
+    if (!validOrderBy.includes(orderBy)) {
+      return NextResponse.json(
+        { success: false, message: "排序规则不合法" },
+        { status: 400 }
+      );
+    }
+
+    const orderDirInput = rawBody.orderDir;
+    const validOrderDir: DictationRandomRules["orderDir"][] = ["asc", "desc"];
+    const orderDir =
+      orderDirInput === undefined
+        ? "desc"
+        : (orderDirInput as DictationRandomRules["orderDir"]);
+    if (!validOrderDir.includes(orderDir)) {
+      return NextResponse.json(
+        { success: false, message: "排序方向不合法" },
+        { status: 400 }
+      );
+    }
+
+    const subjectInput = rawBody.subject;
+    let subject: DictationSubject | undefined;
+    if (subjectInput !== undefined && subjectInput !== null && subjectInput !== "") {
+      if (subjectInput !== "语文" && subjectInput !== "英语") {
+        return NextResponse.json(
+          { success: false, message: "学科参数不合法" },
+          { status: 400 }
+        );
+      }
+      subject = subjectInput;
+    }
+
+    const gradeId = parseOptionalPositiveInt(rawBody.gradeId);
+    if (gradeId === null) {
+      return NextResponse.json(
+        { success: false, message: "年级参数不合法" },
+        { status: 400 }
+      );
+    }
+
+    const subjectId = parseOptionalPositiveInt(rawBody.subjectId);
+    if (subjectId === null) {
+      return NextResponse.json(
+        { success: false, message: "学科参数不合法" },
+        { status: 400 }
+      );
+    }
+
+    const unitId = parseOptionalPositiveInt(rawBody.unitId);
+    if (unitId === null) {
+      return NextResponse.json(
+        { success: false, message: "单元参数不合法" },
+        { status: 400 }
+      );
+    }
+
+    const semesterInput = rawBody.semester;
+    let semester: Semester | undefined;
+    if (semesterInput !== undefined && semesterInput !== null && semesterInput !== "") {
+      if (
+        typeof semesterInput !== "string" ||
+        !SEMESTERS.includes(semesterInput as Semester)
+      ) {
+        return NextResponse.json(
+          { success: false, message: "学期参数不合法" },
+          { status: 400 }
+        );
+      }
+      semester = semesterInput as Semester;
+    }
+
+    const name =
+      typeof rawBody.name === "string" && rawBody.name.trim()
+        ? rawBody.name.trim()
+        : undefined;
+
+    const filters = [
+      eq(dictationWords.userId, user.id),
+      eq(dictationWords.isMastered, 0),
+    ];
+
+    if (subject) {
+      filters.push(eq(dictationWords.subject, subject));
+    }
+    if (gradeId) {
+      filters.push(eq(dictationWords.gradeId, gradeId));
+    }
+    if (subjectId) {
+      filters.push(eq(dictationWords.subjectId, subjectId));
+    }
+    if (unitId) {
+      filters.push(eq(dictationWords.unitId, unitId));
+    }
+    if (semester) {
+      filters.push(
+        sql`(${dictationWords.semester} = ${semester} OR ${units.semester} = ${semester})`
+      );
+    }
+
+    const wordsWithStats = await db
       .select({
         id: dictationWords.id,
         totalPractices: sql<number>`COUNT(DISTINCT ${dictationSessionItems.id})`,
@@ -41,31 +175,8 @@ export async function POST(request: Request) {
         dictationSessionItems,
         eq(dictationWords.id, dictationSessionItems.dictationWordId)
       )
-      .where(
-        and(
-          eq(dictationWords.userId, user.id),
-          eq(dictationWords.isMastered, 0)
-        )
-      )
+      .where(and(...filters))
       .groupBy(dictationWords.id);
-
-    if (subject && ["语文", "英语"].includes(subject)) {
-      query = query.where(eq(dictationWords.subject, subject)) as typeof query;
-    }
-    if (gradeId) {
-      query = query.where(eq(dictationWords.gradeId, gradeId)) as typeof query;
-    }
-    if (subjectId) {
-      query = query.where(eq(dictationWords.subjectId, subjectId)) as typeof query;
-    }
-    if (unitId) {
-      query = query.where(eq(dictationWords.unitId, unitId)) as typeof query;
-    }
-    if (semester) {
-      query = query.where(eq(units.semester, semester)) as typeof query;
-    }
-
-    let wordsWithStats = await query;
 
     if (wordsWithStats.length === 0) {
       return NextResponse.json(
@@ -95,13 +206,24 @@ export async function POST(request: Request) {
 
     const selected = sorted.slice(0, Math.min(count, sorted.length));
 
+    const randomRules: DictationRandomRules = {
+      count,
+      orderBy,
+      orderDir,
+      ...(subject ? { subject } : {}),
+      ...(gradeId ? { gradeId } : {}),
+      ...(subjectId ? { subjectId } : {}),
+      ...(unitId ? { unitId } : {}),
+      ...(semester ? { semester } : {}),
+    };
+
     const result = await db
       .insert(dictationSessions)
       .values({
         userId: user.id,
         name: name || `随机默写 ${new Date().toLocaleString("zh-CN")}`,
         isRandom: 1,
-        randomRules: JSON.stringify({ count, orderBy, orderDir, subject, gradeId, subjectId, unitId, semester }),
+        randomRules: JSON.stringify(randomRules),
       })
       .returning({ id: dictationSessions.id });
 

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { db, dictationWords, dictationSessionItems, grades, subjects, units } from "@/lib/db";
 import { requireAuth } from "@/lib/auth";
-import { eq, and, like, sql } from "drizzle-orm";
+import { eq, and, like, sql, gte, lte } from "drizzle-orm";
 import type { CreateDictationWordInput } from "@/types";
 import { SEMESTERS } from "@/types";
 
@@ -15,6 +15,45 @@ export async function GET(request: Request) {
     const subjectFilter = searchParams.get("subjectId");
     const unitFilter = searchParams.get("unitId");
     const semesterFilter = searchParams.get("semester");
+    const totalCorrectMinRaw = searchParams.get("totalCorrectMin");
+    const totalCorrectMaxRaw = searchParams.get("totalCorrectMax");
+
+    const parseNonNegativeInt = (value: string | null, label: string) => {
+      if (value === null || value === undefined || value === "") {
+        return null;
+      }
+      const trimmed = value.trim();
+      if (!/^\d+$/.test(trimmed)) {
+        throw new Error(`${label}必须是非负整数`);
+      }
+      return Number(trimmed);
+    };
+
+    let totalCorrectMin: number | null;
+    let totalCorrectMax: number | null;
+    try {
+      totalCorrectMin = parseNonNegativeInt(totalCorrectMinRaw, "正确次数下限");
+      totalCorrectMax = parseNonNegativeInt(totalCorrectMaxRaw, "正确次数上限");
+      if (
+        totalCorrectMin !== null &&
+        totalCorrectMax !== null &&
+        totalCorrectMin > totalCorrectMax
+      ) {
+        return NextResponse.json(
+          { success: false, message: "正确次数下限不能大于上限" },
+          { status: 400 }
+        );
+      }
+    } catch (error) {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            error instanceof Error ? error.message : "正确次数筛选参数不合法",
+        },
+        { status: 400 }
+      );
+    }
 
     const filters = [eq(dictationWords.userId, user.id)];
     if (gradeFilter) {
@@ -50,6 +89,14 @@ export async function GET(request: Request) {
       .from(dictationSessionItems)
       .groupBy(dictationSessionItems.dictationWordId)
       .as("stats");
+
+    const totalCorrectExpr = sql<number>`COALESCE(${statsSubquery.totalCorrect}, 0)`;
+    if (totalCorrectMin !== null) {
+      filters.push(gte(totalCorrectExpr, totalCorrectMin));
+    }
+    if (totalCorrectMax !== null) {
+      filters.push(lte(totalCorrectExpr, totalCorrectMax));
+    }
 
     const query = db
       .select({

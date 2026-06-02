@@ -27,6 +27,8 @@ export default function DictationListPage() {
   const [filterSubjectId, setFilterSubjectId] = useState("");
   const [filterUnitId, setFilterUnitId] = useState("");
   const [tagFilter, setTagFilter] = useState<string>("");
+  const [filterTotalCorrectMin, setFilterTotalCorrectMin] = useState("");
+  const [filterTotalCorrectMax, setFilterTotalCorrectMax] = useState("");
   const [defaultsReady, setDefaultsReady] = useState(false);
 
   useEffect(() => {
@@ -74,14 +76,34 @@ export default function DictationListPage() {
 
   const fetchWords = useCallback(async () => {
     if (!defaultsReady) return;
+
+    const parseFilterInt = (value: string, label: string) => {
+      if (!value.trim()) return null;
+      if (!/^\d+$/.test(value.trim())) {
+        throw new Error(`${label}必须是非负整数`);
+      }
+      return Number(value.trim());
+    };
+
     setLoading(true);
     try {
+      const minCorrect = parseFilterInt(filterTotalCorrectMin, "正确次数下限");
+      const maxCorrect = parseFilterInt(filterTotalCorrectMax, "正确次数上限");
+      if (minCorrect !== null && maxCorrect !== null && minCorrect > maxCorrect) {
+        setError("正确次数下限不能大于上限");
+        return;
+      }
+
       const params = new URLSearchParams();
       if (filterGradeId) params.set("gradeId", filterGradeId);
       if (filterSubjectId) params.set("subjectId", filterSubjectId);
       if (filterUnitId) params.set("unitId", filterUnitId);
       if (filterSemester) params.set("semester", filterSemester);
       if (tagFilter) params.set("tag", tagFilter);
+      if (minCorrect !== null) params.set("totalCorrectMin", String(minCorrect));
+      if (maxCorrect !== null) params.set("totalCorrectMax", String(maxCorrect));
+
+      setError("");
       const res = await fetch("/api/dictation?" + params.toString());
       const data = await res.json();
       if (data.success) {
@@ -89,12 +111,21 @@ export default function DictationListPage() {
       } else {
         setError(data.message);
       }
-    } catch {
-      setError("加载失败");
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "加载失败");
     } finally {
       setLoading(false);
     }
-  }, [defaultsReady, filterGradeId, filterSubjectId, filterUnitId, filterSemester, tagFilter]);
+  }, [
+    defaultsReady,
+    filterGradeId,
+    filterSubjectId,
+    filterUnitId,
+    filterSemester,
+    tagFilter,
+    filterTotalCorrectMin,
+    filterTotalCorrectMax,
+  ]);
 
   useEffect(() => {
     fetchWords();
@@ -243,6 +274,27 @@ export default function DictationListPage() {
             <option value="">全部单元</option>
             {unitOptions.map((u) => (<option key={u.id} value={u.id}>{u.name} ({u.semester})</option>))}
           </select>
+
+          <div className="flex items-center gap-1.5 text-sm text-gray-600">
+            <span className="text-gray-500">正确次数</span>
+            <input
+              type="text"
+              inputMode="numeric"
+              value={filterTotalCorrectMin}
+              onChange={(e) => setFilterTotalCorrectMin(e.target.value)}
+              className="input-field py-1.5 text-sm w-20"
+              placeholder="最小"
+            />
+            <span className="text-gray-400">~</span>
+            <input
+              type="text"
+              inputMode="numeric"
+              value={filterTotalCorrectMax}
+              onChange={(e) => setFilterTotalCorrectMax(e.target.value)}
+              className="input-field py-1.5 text-sm w-20"
+              placeholder="最大"
+            />
+          </div>
 
           <label className="flex items-center space-x-2 text-sm text-gray-600 cursor-pointer ml-2">
             <input

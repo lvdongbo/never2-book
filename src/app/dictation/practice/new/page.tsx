@@ -254,6 +254,11 @@ export default function NewDictationPracticePage() {
   };
 
   const handleRandomCreate = async () => {
+    if (subjects.length > 0 && !randomSubjectId) {
+      setError("请先选择学科");
+      return;
+    }
+
     setCreating(true);
     setError("");
 
@@ -584,7 +589,7 @@ export default function NewDictationPracticePage() {
           <button
             onClick={handleRandomCreate}
             className="btn-primary"
-            disabled={creating || randomSourceCount === 0}
+            disabled={creating || randomSourceCount === 0 || (subjects.length > 0 && !randomSubjectId)}
           >
             {creating
               ? "生成中..."

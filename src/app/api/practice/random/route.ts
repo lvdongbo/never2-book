@@ -7,18 +7,104 @@ import {
 } from "@/lib/db";
 import { requireAuth } from "@/lib/auth";
 import { eq, and, sql } from "drizzle-orm";
-import type { RandomRules } from "@/types";
+import type { RandomRules, Subject } from "@/types";
+
+function parseOptionalPositiveInt(value: unknown): number | undefined | null {
+  if (value === undefined || value === null || value === "") {
+    return undefined;
+  }
+
+  if (typeof value === "number") {
+    if (!Number.isInteger(value) || value <= 0) {
+      return null;
+    }
+    return value;
+  }
+
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!/^\d+$/.test(trimmed)) {
+      return null;
+    }
+    const parsed = parseInt(trimmed, 10);
+    if (!Number.isInteger(parsed) || parsed <= 0) {
+      return null;
+    }
+    return parsed;
+  }
+
+  return null;
+}
 
 // POST - Generate a random practice session
 export async function POST(request: Request) {
   try {
     const user = await requireAuth();
-    const body: RandomRules & { name?: string } = await request.json();
+    const rawBody = (await request.json()) as Record<string, unknown>;
 
-    const { count = 10, orderBy = "random", orderDir = "desc", subject, name } = body;
+    const countInput = rawBody.count;
+    const countParsed = parseOptionalPositiveInt(countInput);
+    if (countParsed === null) {
+      return NextResponse.json(
+        { success: false, message: "题目数量必须是正整数" },
+        { status: 400 }
+      );
+    }
+    const count = Math.max(1, Math.min(50, countParsed ?? 10));
 
-    // Get non-mastered mistakes with stats
-    let query = db
+    const orderByInput = rawBody.orderBy;
+    const validOrderBy: RandomRules["orderBy"][] = ["practices", "errors", "random"];
+    const orderBy =
+      orderByInput === undefined
+        ? "random"
+        : (orderByInput as RandomRules["orderBy"]);
+    if (!validOrderBy.includes(orderBy)) {
+      return NextResponse.json(
+        { success: false, message: "排序规则不合法" },
+        { status: 400 }
+      );
+    }
+
+    const orderDirInput = rawBody.orderDir;
+    const validOrderDir: RandomRules["orderDir"][] = ["asc", "desc"];
+    const orderDir =
+      orderDirInput === undefined
+        ? "desc"
+        : (orderDirInput as RandomRules["orderDir"]);
+    if (!validOrderDir.includes(orderDir)) {
+      return NextResponse.json(
+        { success: false, message: "排序方向不合法" },
+        { status: 400 }
+      );
+    }
+
+    const subjectInput = rawBody.subject;
+    let subject: Subject | undefined;
+    if (subjectInput !== undefined && subjectInput !== null && subjectInput !== "") {
+      if (subjectInput !== "语文" && subjectInput !== "数学" && subjectInput !== "英语") {
+        return NextResponse.json(
+          { success: false, message: "学科参数不合法" },
+          { status: 400 }
+        );
+      }
+      subject = subjectInput;
+    }
+
+    const name =
+      typeof rawBody.name === "string" && rawBody.name.trim()
+        ? rawBody.name.trim()
+        : undefined;
+
+    const filters = [
+      eq(mistakes.userId, user.id),
+      eq(mistakes.isMastered, 0),
+    ];
+
+    if (subject) {
+      filters.push(eq(mistakes.subject, subject));
+    }
+
+    const mistakesWithStats = await db
       .select({
         id: mistakes.id,
         totalPractices: sql<number>`COUNT(DISTINCT ${practiceSessionItems.id})`,
@@ -29,20 +115,8 @@ export async function POST(request: Request) {
         practiceSessionItems,
         eq(mistakes.id, practiceSessionItems.mistakeId)
       )
-      .where(
-        and(
-          eq(mistakes.userId, user.id),
-          eq(mistakes.isMastered, 0)
-        )
-      )
+      .where(and(...filters))
       .groupBy(mistakes.id);
-
-    // Apply subject filter
-    if (subject && ["语文", "数学", "英语"].includes(subject)) {
-      query = query.where(eq(mistakes.subject, subject)) as typeof query;
-    }
-
-    let mistakesWithStats = await query;
 
     if (mistakesWithStats.length === 0) {
       return NextResponse.json(
@@ -68,11 +142,14 @@ export async function POST(request: Request) {
       }
     });
 
-    // Select the appropriate number
-    const selected =
-      orderBy === "random"
-        ? sorted.slice(0, Math.min(count, sorted.length))
-        : sorted.slice(0, Math.min(count, sorted.length));
+    const selected = sorted.slice(0, Math.min(count, sorted.length));
+
+    const randomRules: RandomRules = {
+      count,
+      orderBy,
+      orderDir,
+      ...(subject ? { subject } : {}),
+    };
 
     // Create session
     const result = await db
@@ -81,7 +158,7 @@ export async function POST(request: Request) {
         userId: user.id,
         name: name || `随机练习 ${new Date().toLocaleString("zh-CN")}`,
         isRandom: 1,
-        randomRules: JSON.stringify({ count, orderBy, orderDir, subject }),
+        randomRules: JSON.stringify(randomRules),
       })
       .returning({ id: practiceSessions.id });
 
