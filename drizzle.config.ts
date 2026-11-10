@@ -1,4 +1,9 @@
 import type { Config } from "drizzle-kit";
+import { loadEnvConfig } from "@next/env";
+import { loadLocalDataConfig } from "./drizzle/local-data.mjs";
+
+loadEnvConfig(process.cwd(), process.env.NODE_ENV !== "production");
+loadLocalDataConfig();
 
 const dbUrl = process.env.DATABASE_URL || "";
 
@@ -11,5 +16,5 @@ export default {
   dialect: isPostgres ? "postgresql" : "sqlite",
   dbCredentials: isPostgres
     ? { url: dbUrl }
-    : { url: "./data/never2.db" },
+    : { url: dbUrl || "./data/never2.db" },
 } satisfies Config;

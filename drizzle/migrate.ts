@@ -1,6 +1,11 @@
 import Database from "better-sqlite3";
 import path from "path";
 import fs from "fs";
+import { loadEnvConfig } from "@next/env";
+import { loadLocalDataConfig } from "./local-data.mjs";
+
+loadEnvConfig(process.cwd(), process.env.NODE_ENV !== "production");
+loadLocalDataConfig();
 
 const DB_PATH =
   process.env.DATABASE_URL || path.join(process.cwd(), "data", "never2.db");
@@ -17,7 +22,7 @@ const resolvedPath = DB_PATH.startsWith("./")
   : DB_PATH;
 
 const sqlite = new Database(resolvedPath);
-sqlite.pragma("journal_mode = WAL");
+sqlite.pragma(process.env.NEVER2_DATA_DIR ? "journal_mode = DELETE" : "journal_mode = WAL");
 sqlite.pragma("foreign_keys = ON");
 
 sqlite.exec(`

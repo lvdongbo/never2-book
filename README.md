@@ -40,6 +40,20 @@ npm run dev
 
 访问 http://localhost:3000
 
+### 使用网盘同步本地数据
+
+两台电脑分别安装项目，使用同一个网盘同步文件夹。每台电脑在项目根目录的 `.env.local` 中配置本机的绝对路径，路径含空格时加引号：
+
+```dotenv
+NEVER2_DATA_DIR="/Users/你的用户名/网盘/不二集"
+```
+
+启用后，应用和数据库迁移都会使用该文件夹里的 `never2.db`，上传的本地图片保存在 `uploads/`。可在该文件夹内另建一份 `.env.local`，存放 `JWT_SECRET`、`LLM_API_KEY`、`LLM_BASE_URL`、`LLM_MODEL` 等共用配置。读取这份文件需要 Node.js 20.12 或更新版本。同名配置优先使用系统环境变量或项目自己的配置，若希望从网盘读取，把对应配置从项目的 `.env.local` 移到网盘文件即可。网盘文件中的 API Key 会随文件一起同步。
+
+如果已有数据，先停止应用，再将现有 SQLite 数据库的完整备份命名为 `never2.db` 放入该文件夹，并复制原有 `uploads/`。如果旧目录仍有 `never2.db-wal`，请先用 SQLite 的备份功能生成完整备份，避免遗漏最近写入。然后运行 `npm run db:migrate` 和 `npm run dev`。首次使用时迁移命令会在指定位置创建数据库。
+
+**两台电脑请轮流使用。** 离开一台电脑前先停止应用，等网盘同步完成。换到另一台时，等文件下载完成再启动。两边各自离线修改后，网盘无法合并数据库里的记录。
+
 ### Docker 部署
 
 ```bash
@@ -74,6 +88,7 @@ docker compose down
 
 | 变量 | 说明 | 默认值 |
 |------|------|--------|
+| `NEVER2_DATA_DIR` | 本地 SQLite、图片和共用配置所在目录的绝对路径。设置后由该目录决定数据库和图片路径 | 不设置 |
 | `DATABASE_URL` | SQLite 数据库路径 | `./data/never2.db` |
 | `JWT_SECRET` | JWT 签名密钥 | 内置默认值（生产环境请更换） |
 | `UPLOAD_DIR` | 图片上传目录 | `./data/uploads` |

@@ -46,7 +46,7 @@ export async function getDb() {
     : dbPath;
 
   const sqlite = new Database(resolvedPath);
-  sqlite.pragma("journal_mode = WAL");
+  sqlite.pragma(process.env.NEVER2_DATA_DIR ? "journal_mode = DELETE" : "journal_mode = WAL");
   sqlite.pragma("foreign_keys = ON");
 
   return drizzle(sqlite, { schema: sqliteSchema });

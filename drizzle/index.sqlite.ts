@@ -20,7 +20,7 @@ const resolvedPath = DB_PATH.startsWith("./")
   : DB_PATH;
 
 const sqlite = new Database(resolvedPath);
-sqlite.pragma("journal_mode = WAL");
+sqlite.pragma(process.env.NEVER2_DATA_DIR ? "journal_mode = DELETE" : "journal_mode = WAL");
 sqlite.pragma("foreign_keys = ON");
 
 export const db = drizzle(sqlite, { schema });

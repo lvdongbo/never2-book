@@ -1,3 +1,7 @@
+import { loadLocalDataConfig } from "./drizzle/local-data.mjs";
+
+loadLocalDataConfig();
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   experimental: {
