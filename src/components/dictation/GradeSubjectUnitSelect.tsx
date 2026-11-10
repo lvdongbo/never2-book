@@ -17,7 +17,7 @@ interface GradeSubjectUnitSelectProps {
   unitId: number | null;
   semester: Semester | null;
   onGradeChange: (id: number | null) => void;
-  onSubjectChange: (id: number | null) => void;
+  onSubjectChange: (id: number | null, name: string | null) => void;
   onUnitChange: (id: number | null) => void;
   onSemesterChange: (semester: Semester | null) => void;
   applyUserDefaults?: boolean;
@@ -100,7 +100,7 @@ export default function GradeSubjectUnitSelect({
 
   const handleSubjectChange = (value: string) => {
     const id = value ? parseInt(value) : null;
-    onSubjectChange(id);
+    onSubjectChange(id, subjects.find((subject) => subject.id === id)?.name ?? null);
     if (id !== subjectId) {
       onUnitChange(null);
     }

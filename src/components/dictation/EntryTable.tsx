@@ -1,26 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import GradeSubjectUnitSelect from "./GradeSubjectUnitSelect";
-import type { Semester } from "@/types";
-
-interface TableRow {
-  id: string;
-  prompt: string;
-  answer: string;
-  rowTags: string;
-}
+import { parseBatchText, getBatchPrompts } from "@/lib/dictation-batch";
+import type { DictationSubject, Semester } from "@/types";
 
 interface EntryTableProps {
   initialEntries?: Array<{ prompt: string; answer: string }>;
   showBack?: boolean;
   onBack?: () => void;
-}
-
-let rowCounter = 0;
-function nextId() {
-  return `row-${++rowCounter}`;
 }
 
 export default function EntryTable({
@@ -31,46 +20,56 @@ export default function EntryTable({
   const router = useRouter();
   const [gradeId, setGradeId] = useState<number | null>(null);
   const [subjectId, setSubjectId] = useState<number | null>(null);
+  const [subjectName, setSubjectName] = useState<string | null>(null);
+  const prompts = getBatchPrompts(subjectName);
+  const [preferredPrompt, setPreferredPrompt] = useState<DictationSubject>("语文");
+  const activePrompt = prompts.find(({ subject }) => subject === preferredPrompt) ?? prompts[0];
+  const showPromptTabs = prompts.length > 1;
   const [unitId, setUnitId] = useState<number | null>(null);
   const [semester, setSemester] = useState<Semester | null>(null);
-  const [rows, setRows] = useState<TableRow[]>(() =>
-    initialEntries.length > 0
-      ? initialEntries.map((e) => ({
-          id: nextId(),
-          prompt: e.prompt,
-          answer: e.answer,
-          rowTags: "",
-        }))
-      : []
-  );
+  const [text, setText] = useState(() => initialEntries.map(e => `${e.answer} | ${e.prompt}`).join("\n"));
+  const [copyStatus, setCopyStatus] = useState<{
+    subject: DictationSubject;
+    status: "copying" | "copied" | "failed";
+  } | null>(null);
+  const promptDialog = useRef<HTMLDialogElement>(null);
+  const promptFields = useRef<Partial<Record<DictationSubject, HTMLTextAreaElement | null>>>({});
+  const { entries, errors } = parseBatchText(text);
+  const validCount = entries.length;
   const [globalTags, setGlobalTags] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  const addRow = () => {
-    setRows((prev) => [
-      ...prev,
-      { id: nextId(), prompt: "", answer: "", rowTags: "" },
-    ]);
+  const handleCopyPrompt = async (subject: DictationSubject, prompt: string) => {
+    setCopyStatus({ subject, status: "copying" });
+    try {
+      await navigator.clipboard.writeText(prompt);
+    } catch {
+      const field = promptFields.current[subject];
+      if (!field || field.closest("[hidden]") || !promptDialog.current?.open) {
+        setCopyStatus({ subject, status: "failed" });
+        return;
+      }
+      field.focus();
+      field.select();
+      try {
+        if (!document.execCommand("copy")) {
+          setCopyStatus({ subject, status: "failed" });
+          return;
+        }
+      } catch {
+        setCopyStatus({ subject, status: "failed" });
+        return;
+      }
+    }
+    setCopyStatus({ subject, status: "copied" });
   };
-
-  const removeRow = (id: string) => {
-    setRows((prev) => prev.filter((r) => r.id !== id));
-  };
-
-  const updateRow = (
-    id: string,
-    field: "prompt" | "answer" | "rowTags",
-    value: string
-  ) => {
-    setRows((prev) =>
-      prev.map((r) => (r.id === id ? { ...r, [field]: value } : r))
-    );
-  };
-
-  const validCount = rows.filter((r) => r.answer.trim()).length;
 
   const handleSave = async () => {
+    if (errors.length > 0) {
+      setError("请先修正格式错误的行，再保存");
+      return;
+    }
     if (validCount === 0) {
       setError("请至少添加一条有效数据");
       return;
@@ -93,18 +92,7 @@ export default function EntryTable({
           gradeId,
           unitId,
           semester,
-          entries: rows
-            .filter((r) => r.answer.trim())
-            .map((r) => ({
-              prompt: r.prompt.trim(),
-              answer: r.answer.trim(),
-              tags: r.rowTags
-                ? r.rowTags
-                    .split(/[,，]/)
-                    .map((t) => t.trim())
-                    .filter(Boolean)
-                : undefined,
-            })),
+          entries,
           tags: globalTagsList,
         }),
       });
@@ -122,14 +110,6 @@ export default function EntryTable({
     }
   };
 
-  const [pinyinLoading, setPinyinLoading] = useState<Record<string, boolean>>({});
-
-  // Default labels - will be determined by selected subject at form container level
-  const col1Label = "答案";
-  const col2Label = "提示";
-  const col1Placeholder = "答案";
-  const col2Placeholder = "提示";
-
   return (
     <div className="space-y-4">
       {error && (
@@ -145,130 +125,135 @@ export default function EntryTable({
         unitId={unitId}
         semester={semester}
         onGradeChange={setGradeId}
-        onSubjectChange={setSubjectId}
+        onSubjectChange={(id, name) => {
+          setSubjectId(id);
+          setSubjectName(name);
+        }}
         onUnitChange={setUnitId}
         onSemesterChange={setSemester}
         applyUserDefaults
       />
 
-      {/* Table */}
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="text-left text-xs text-gray-400 border-b border-gray-200">
-              <th className="pb-2 pr-2 font-medium w-7">#</th>
-              <th className="pb-2 pr-2 font-medium">{col1Label}</th>
-              <th className="pb-2 pr-2 font-medium">{col2Label}</th>
-              <th className="pb-2 pr-2 font-medium">标签</th>
-              <th className="pb-2 font-medium w-10"></th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {rows.map((row, index) => (
-              <tr key={row.id}>
-                <td className="py-1.5 pr-2 text-gray-400 text-xs align-top pt-3">
-                  {index + 1}
-                </td>
-                <td className="py-1.5 pr-2">
-                  <input
-                    type="text"
-                    className="input-field py-1.5 text-sm"
-                    placeholder={col1Placeholder}
-                    value={row.answer}
-                    onChange={(e) => updateRow(row.id, "answer", e.target.value)}
-                    onBlur={async (e) => {
-                      if (!e.target.value.trim()) return;
-                      const rowData = rows.find((r) => r.id === row.id);
-                      if (rowData?.prompt.trim()) return;
-                      setPinyinLoading((p) => ({ ...p, [row.id]: true }));
-                      try {
-                        const res = await fetch("/api/dictation/pinyin", {
-                          method: "POST",
-                          headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({ text: e.target.value.trim() }),
-                        });
-                        const result = await res.json();
-                        if (result.success && result.data) {
-                          updateRow(row.id, "prompt", result.data);
-                        }
-                      } catch {} finally {
-                        setPinyinLoading((p) => ({ ...p, [row.id]: false }));
-                      }
-                    }}
-                  />
-                </td>
-                <td className="py-1.5 pr-2">
-                  <div className="relative">
-                    <input
-                      type="text"
-                      className="input-field py-1.5 text-sm"
-                      placeholder={col2Placeholder}
-                      value={row.prompt}
-                      onChange={(e) => updateRow(row.id, "prompt", e.target.value)}
-                    />
-                    {pinyinLoading[row.id] && (
-                      <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-400">
-                        转换中...
-                      </span>
-                    )}
-                  </div>
-                </td>
-                <td className="py-1.5 pr-2">
-                  <input
-                    type="text"
-                    className="input-field py-1.5 text-sm"
-                    placeholder="可选"
-                    value={row.rowTags}
-                    onChange={(e) => updateRow(row.id, "rowTags", e.target.value)}
-                  />
-                </td>
-                <td className="py-1.5 align-top pt-3">
-                  <button
-                    onClick={() => removeRow(row.id)}
-                    className="text-gray-300 hover:text-red-500 transition-colors"
-                    title="删除"
-                  >
-                    <svg
-                      className="w-4 h-4"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M6 18L18 6M6 6l12 12"
-                      />
-                    </svg>
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Add row */}
-      <button
-        onClick={addRow}
-        className="flex items-center space-x-1 text-sm text-primary-600 hover:text-primary-700 font-medium"
-      >
-        <svg
-          className="w-4 h-4"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
+      <div>
+        <div className="flex items-center justify-between gap-3 mb-2">
+          <label htmlFor="batch-words" className="font-medium text-sm text-gray-700">批量录入内容</label>
+          <button
+            type="button"
+            aria-haspopup="dialog"
+            className="text-sm text-primary-600 hover:text-primary-700"
+            onClick={() => {
+              setCopyStatus(null);
+              promptDialog.current?.showModal();
+            }}
+          >
+            查看 AI 提示词
+          </button>
+        </div>
+        <p className="text-xs text-gray-500 mb-2">每行一条：答案 | 提示 | 标签。标签可省略，多个标签用逗号分隔。</p>
+        <textarea id="batch-words" rows={14} className="input-field font-mono text-sm resize-y min-h-[320px]" value={text}
+          disabled={saving} onChange={e => { setText(e.target.value); setError(""); }}
+          placeholder={"apple | 苹果 | 单词\ngreat fun | 非常有趣 | 词组\n波澜壮阔 | bō lán zhuàng kuò | 词语"} />
+        <p className="text-sm text-gray-500 mt-2" aria-live="polite">已识别 {validCount} 条有效内容{errors.length > 0 ? `，${errors.length} 行格式错误，请修正后保存` : ""}</p>
+        {errors.length > 0 && <ul className="mt-2 text-sm text-red-600 space-y-1 max-h-40 overflow-y-auto" aria-live="polite">
+          {errors.map(e => <li key={e.line}>第 {e.line} 行：{e.message}</li>)}
+        </ul>}
+        <dialog
+          ref={promptDialog}
+          aria-labelledby="batch-ai-prompt-title"
+          className="w-[calc(100%-2rem)] max-w-2xl rounded-xl bg-white p-5 shadow-xl backdrop:bg-black/50"
         >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M12 4v16m8-8H4"
-          />
-        </svg>
-        <span>添加一行</span>
-      </button>
+          <div className="flex items-center justify-between gap-4">
+            <h3 id="batch-ai-prompt-title" className="text-lg font-semibold text-gray-900">
+              AI 提示词
+            </h3>
+            <button
+              type="button"
+              aria-label="关闭 AI 提示词"
+              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-900"
+              onClick={() => promptDialog.current?.close()}
+            >
+              <span aria-hidden="true" className="text-xl leading-none">×</span>
+            </button>
+          </div>
+          <p className="mt-2 text-sm text-gray-600">把提示词和图片一起发给 AI，再将生成的内容粘贴到批量录入框。</p>
+          {prompts.length === 0 && (
+            <p className="mt-3 text-sm text-gray-600">当前学科暂无提示词。请选择语文或英语。</p>
+          )}
+          {showPromptTabs && (
+            <div role="tablist" aria-label="提示词学科" className="mt-4 flex gap-4 border-b border-gray-200">
+              {prompts.map(({ subject }, index) => {
+                const selected = activePrompt.subject === subject;
+                return (
+                  <button
+                    key={subject}
+                    id={`batch-prompt-tab-${subject}`}
+                    type="button"
+                    role="tab"
+                    aria-selected={selected}
+                    aria-controls={`batch-prompt-panel-${subject}`}
+                    tabIndex={selected ? 0 : -1}
+                    className={`border-b-2 px-3 py-2 text-sm font-medium ${selected
+                      ? "border-primary-600 text-primary-700"
+                      : "border-transparent text-gray-600 hover:text-primary-700"}`}
+                    onClick={() => setPreferredPrompt(subject)}
+                    onKeyDown={(event) => {
+                      const lastIndex = prompts.length - 1;
+                      let nextIndex: number;
+                      switch (event.key) {
+                        case "ArrowLeft": nextIndex = (index + lastIndex) % prompts.length; break;
+                        case "ArrowRight": nextIndex = (index + 1) % prompts.length; break;
+                        case "Home": nextIndex = 0; break;
+                        case "End": nextIndex = lastIndex; break;
+                        default: return;
+                      }
+                      event.preventDefault();
+                      const nextSubject = prompts[nextIndex].subject;
+                      setPreferredPrompt(nextSubject);
+                      document.getElementById(`batch-prompt-tab-${nextSubject}`)?.focus();
+                    }}
+                  >
+                    {subject}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          <div className="mt-3">
+            {prompts.map(({ subject, prompt }) => {
+              const status = copyStatus?.subject === subject ? copyStatus.status : null;
+              return (
+                <section
+                  key={subject}
+                  id={`batch-prompt-panel-${subject}`}
+                  role={showPromptTabs ? "tabpanel" : undefined}
+                  aria-labelledby={showPromptTabs ? `batch-prompt-tab-${subject}` : undefined}
+                  hidden={activePrompt.subject !== subject}
+                >
+                  <label htmlFor={`batch-prompt-${subject}`} className="label">{subject}提示词</label>
+                  <textarea
+                    id={`batch-prompt-${subject}`}
+                    ref={(field) => { promptFields.current[subject] = field; }}
+                    readOnly
+                    rows={16}
+                    value={prompt}
+                    className="input-field max-h-[52dvh] resize-none bg-gray-50 text-sm text-gray-700"
+                  />
+                  <div className="mt-2 flex flex-wrap items-center justify-end gap-2">
+                    <p role="status" className="mr-auto text-sm">
+                      {status === "copying" && "正在复制…"}
+                      {status === "copied" && <span className="font-medium text-green-700">复制成功，提示词已存入剪贴板。</span>}
+                      {status === "failed" && <span className="text-red-700">自动复制失败，请手动复制上方提示词。</span>}
+                    </p>
+                    <button type="button" className="btn-primary" onClick={() => handleCopyPrompt(subject, prompt)} disabled={copyStatus?.status === "copying"}>
+                      {status === "copied" ? "已复制" : `复制${subject}提示词`}
+                    </button>
+                  </div>
+                </section>
+              );
+            })}
+          </div>
+        </dialog>
+      </div>
 
       {/* Global tags */}
       <div>
@@ -290,7 +275,7 @@ export default function EntryTable({
         <button
           onClick={handleSave}
           className="btn-primary"
-          disabled={saving || validCount === 0}
+          disabled={saving || validCount === 0 || errors.length > 0}
         >
           {saving ? "保存中..." : `批量添加（${validCount} 条）`}
         </button>
